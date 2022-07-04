@@ -13,6 +13,7 @@
 
 #define MAXARGS 10
 
+// For scalability
 struct cmd {
   int type;
 };
@@ -71,14 +72,16 @@ runcmd(struct cmd *cmd)
   default:
     panic("runcmd");
 
+  // EXEC: The core is system call exec.
   case EXEC:
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(1);
-    exec(ecmd->argv[0], ecmd->argv);
+    exec(ecmd->argv[0], ecmd->argv); // only returns if error
     fprintf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
 
+  // REDIR: implement I/O redirection, with the reuse mechanism of file description.
   case REDIR:
     rcmd = (struct redircmd*)cmd;
     close(rcmd->fd);
@@ -89,6 +92,14 @@ runcmd(struct cmd *cmd)
     runcmd(rcmd->cmd);
     break;
 
+  /* LIST: 
+                O (parent) 
+               /
+              O (right) 
+             /
+            O (left) 
+     left->rigth->parent
+  */
   case LIST:
     lcmd = (struct listcmd*)cmd;
     if(fork1() == 0)
@@ -147,7 +158,7 @@ main(void)
   static char buf[100];
   int fd;
 
-  // Ensure that three file descriptors are open.
+  // Ensure that three file descriptors(0:stdin, 1:stdout, 2:stderr) are open.
   while((fd = open("console", O_RDWR)) >= 0){
     if(fd >= 3){
       close(fd);
@@ -156,17 +167,18 @@ main(void)
   }
 
   // Read and run input commands.
+  // getcmd reads a line.
   while(getcmd(buf, sizeof(buf)) >= 0){
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
       // Chdir must be called by the parent, not the child.
-      buf[strlen(buf)-1] = 0;  // chop \n
+      buf[strlen(buf)-1] = 0;  // chop \n and replace with null. 
       if(chdir(buf+3) < 0)
         fprintf(2, "cannot cd %s\n", buf+3);
       continue;
     }
     if(fork1() == 0)
-      runcmd(parsecmd(buf));
-    wait(0);
+      runcmd(parsecmd(buf)); // Only child process will execute this line.
+    wait(0); // Wait for Child process exit(or killed).
   }
   exit(0);
 }

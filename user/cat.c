@@ -10,6 +10,7 @@ cat(int fd)
   int n;
 
   while((n = read(fd, buf, sizeof(buf))) > 0) {
+    // Write to stdout
     if (write(1, buf, n) != n) {
       fprintf(2, "cat: write error\n");
       exit(1);
@@ -27,7 +28,7 @@ main(int argc, char *argv[])
   int fd, i;
 
   if(argc <= 1){
-    cat(0);
+    cat(0); // Read from stdin
     exit(0);
   }
 
