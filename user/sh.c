@@ -58,7 +58,7 @@ struct cmd *parsecmd(char*);
 void
 runcmd(struct cmd *cmd)
 {
-  int p[2];
+  int p[2]; // pipe file descriptors
   struct backcmd *bcmd;
   struct execcmd *ecmd;
   struct listcmd *lcmd;
@@ -92,13 +92,11 @@ runcmd(struct cmd *cmd)
     runcmd(rcmd->cmd);
     break;
 
-  /* LIST: 
-                O (parent) 
-               /
+  /* LIST: left; right
               O (right) 
              /
             O (left) 
-     left->rigth->parent
+     left->right
   */
   case LIST:
     lcmd = (struct listcmd*)cmd;
@@ -108,6 +106,13 @@ runcmd(struct cmd *cmd)
     runcmd(lcmd->right);
     break;
 
+  /* PIPE: left | right
+          (interior)
+              O
+             / \
+            O   O
+       (left)    (right)
+  */
   case PIPE:
     pcmd = (struct pipecmd*)cmd;
     if(pipe(p) < 0)

@@ -194,10 +194,22 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_sleep\
+	$U/_pingpong\
+	$U/_primes\
+
+UTST=\
 	$U/_tst_open\
+	$U/_tst_fork\
+	$U/_tst_forkexec\
+	$U/_tst_redirected\
+	$U/_tst_pipe1\
+	$U/_tst_pipe2\
+	$U/_tst_list\
 
-
-
+ifeq ($(TST), true)
+UPROGS += $(UTST)
+endif
 
 ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
 UPROGS += \

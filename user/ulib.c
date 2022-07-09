@@ -84,6 +84,7 @@ stat(const char *n, struct stat *st)
   return r;
 }
 
+// naive and unsafe implementation
 int
 atoi(const char *s)
 {

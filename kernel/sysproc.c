@@ -67,7 +67,7 @@ sys_sleep(void)
       release(&tickslock);
       return -1;
     }
-    sleep(&ticks, &tickslock);
+    sleep(&ticks, &tickslock); // this sleep is kernel functions, not the sleep system call in user/usys.S.
   }
   release(&tickslock);
   return 0;
