@@ -57,8 +57,6 @@ int main() {
   int rpfds[2];
   pipe(rpfds);
 
-  printf("prime 2\n"); 
-
   int pid = fork();
 
   if (pid == 0) {
@@ -67,8 +65,8 @@ int main() {
   else {
     close(rpfds[REND]);
 
-    for (int i = 3; i <= 35; i++)
-      if (!drop(2, i)) write(rpfds[WEND], &i, sizeof(i)); // Only little-end
+    for (int i = 2; i <= 35; i++)
+      write(rpfds[WEND], &i, sizeof(i)); // Only little-end
 
 	close(rpfds[WEND]);
 	wait(0);
