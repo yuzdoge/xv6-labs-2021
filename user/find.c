@@ -8,63 +8,51 @@
 /* find.c: Find all the files in a directory tree with a specific name. */
 
 #define BUFSIZE 512 
+char dirpath[BUFSIZE];
 
 void 
-find(char* dirpath, char* tgfile) {
-  char buf[BUFSIZE];
+find(char *subpath, char *tgfile) {
+
+  if (strlen(dirpath) + 1 + DIRSIZ > BUFSIZE) {
+    fprintf(2, "find: path too long\n");
+	return;
+  }
+
   struct dirent de; 
   struct stat st;
+
+  // Concatenate two strings.
+  int cursor = strlen(dirpath);
+  strcpy(&dirpath[cursor], subpath);
+  cursor += strlen(subpath);
+  dirpath[cursor] = '\0';
 
   int fd = open(dirpath, O_RDONLY);
   if (fd < 0) {
     fprintf(2, "find: cannot open directory '%s'\n", dirpath);
-	goto ERROR;
-  } 
+	goto ENDFUNC;
+  }
 
   if (fstat(fd, &st) < 0) {
     fprintf(2, "find: cannot stat %s\n", dirpath);
-	goto ERROR;
+	goto ENDFUNC;
   }
 
-  if (strlen(dirpath) + 1 + DIRSIZ > BUFSIZE) {
-    fprintf(2, "find: path too long\n");
-	goto ERROR;
+  if (st.type != T_DIR) {
+    if (strcmp(subpath, tgfile) == 0)
+      printf("%s\n", dirpath);
+	goto ENDFUNC;
   }
 
-  strcpy(buf, dirpath);
-  char *cursor = buf + strlen(dirpath);
-  *cursor++ = '/'; 
-  
   while (read(fd, &de, sizeof(de)) == sizeof(de)) {
-    if (de.inum == 0) continue;
-
-    // de.name is a string
-    memcpy(cursor, de.name, DIRSIZ);
-
-	if (stat(buf, &st) < 0) {
-	  fprintf(2, "find: cannot stat %s\n");
-	  goto ERROR;
+	if (de.inum && strcmp(de.name, ".") && strcmp(de.name, "..")) {
+      dirpath[cursor] = '/'; 
+      dirpath[cursor + 1] = '\0';
+      find(de.name, tgfile);
 	}
-	
-    switch(st.type) {
-      case T_FILE:
-	    if (strcmp(de.name, tgfile) == 0) {
-          printf("%s\n", buf);
-		}
-	    break;
-	  case T_DIR:
-	    if (strcmp(de.name, ".") && strcmp(de.name, "..")) {
-		  // Do not search "." and ".."
-		  find(buf, tgfile);
-		}
-		break;
-    }  
   }
 
-  close(fd);
-  return;
-
-ERROR:
+ENDFUNC:
   close(fd);
   return;
 
@@ -83,7 +71,6 @@ main(int argc, char *argv[]) {
 	exit(1);
   }
   
-  // argv[1] must be a directory.
   find(argv[1], argv[2]);
   exit(0);
   
