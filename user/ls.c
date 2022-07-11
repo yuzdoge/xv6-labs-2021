@@ -3,6 +3,8 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
+
+// Get the files name(blank-padded), and if it is dir, return only blank-padded.
 char*
 fmtname(char *path)
 {
@@ -35,6 +37,7 @@ ls(char *path)
     return;
   }
 
+  // fstat retrives inode metadata into stat structure
   if(fstat(fd, &st) < 0){
     fprintf(2, "ls: cannot stat %s\n", path);
     close(fd);
@@ -47,14 +50,16 @@ ls(char *path)
     break;
 
   case T_DIR:
+    // fisrt `1` for '/',  the second for '\0'
     if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
       printf("ls: path too long\n");
       break;
     }
     strcpy(buf, path);
     p = buf+strlen(buf);
-    *p++ = '/';
+    *p++ = '/';  // substitute '\0' with '/'.
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
+//printf("----inum: %d\n-----", de.inum);
       if(de.inum == 0)
         continue;
       memmove(p, de.name, DIRSIZ);
@@ -63,6 +68,7 @@ ls(char *path)
         printf("ls: cannot stat %s\n", buf);
         continue;
       }
+//printf("%s\n", buf);
       printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
     }
     break;
