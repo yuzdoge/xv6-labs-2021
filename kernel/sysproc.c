@@ -20,7 +20,7 @@ sys_exit(void)
 uint64
 sys_getpid(void)
 {
-  return myproc()->pid;
+  return myproc()->pid; // defined in kernel/proc.c
 }
 
 uint64
@@ -94,4 +94,18 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64 
+sys_trace(void) 
+{
+  int tracemask;
+  struct proc *p = myproc();
+
+  // ignore tracemask = 1
+  if (argint(0, &tracemask) < 0)
+    return -1;
+  
+  p->tracemask = tracemask;
+  return 0;
 }

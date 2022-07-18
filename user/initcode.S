@@ -6,12 +6,12 @@
 # exec(init, argv)
 .globl start
 start:
-        la a0, init
-        la a1, argv
-        li a7, SYS_exec
-        ecall
+        la a0, init // R[a0] = init, address of "init\0".
+		la a1, argv // R[a1] = argv, address of argv[]
+        li a7, SYS_exec // R[a7] = SYS_exec
+        ecall // trap into kenerl
 
-# for(;;) exit();
+# for(;;) exit(); never exit.
 exit:
         li a7, SYS_exit
         ecall
@@ -22,7 +22,7 @@ init:
   .string "/init\0"
 
 # char *argv[] = { init, 0 };
-.p2align 2
+.p2align 2 // align to 2 bytes, .p2align: align to power of 2. 
 argv:
-  .long init
+  .long init // .long: 32-bit comma separated words. Use 4 bytes here, even if it is RV64. 
   .long 0

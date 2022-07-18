@@ -50,7 +50,7 @@ start()
   int id = r_mhartid();
   w_tp(id);
 
-  // switch to supervisor mode and jump to main().
+  // switch to supervisor mode and jump to main(), because exception raise up.
   asm volatile("mret");
 }
 

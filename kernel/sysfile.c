@@ -415,10 +415,11 @@ sys_chdir(void)
 uint64
 sys_exec(void)
 {
-  char path[MAXPATH], *argv[MAXARG];
+  char path[MAXPATH], *argv[MAXARG]; // syscall: exec(char *path, char *argv)
   int i;
   uint64 uargv, uarg;
 
+  // retrieve path and argv passed by user. 
   if(argstr(0, path, MAXPATH) < 0 || argaddr(1, &uargv) < 0){
     return -1;
   }

@@ -210,6 +210,7 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 }
 
 // a user program that calls exec("/init")
+// the binary of user/initcode.S
 // od -t xC initcode
 uchar initcode[] = {
   0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
@@ -294,6 +295,9 @@ fork(void)
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
+
+  // copy tracemask from parent to child.
+  np->tracemask = p->tracemask;
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)

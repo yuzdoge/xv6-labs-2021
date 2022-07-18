@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+#include "bits.h"
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -25,12 +26,13 @@ int
 fetchstr(uint64 addr, char *buf, int max)
 {
   struct proc *p = myproc();
-  int err = copyinstr(p->pagetable, buf, addr, max);
+  int err = copyinstr(p->pagetable, buf, addr, max); // kernel/vm.c
   if(err < 0)
     return err;
   return strlen(buf);
 }
 
+// encapsulate proc->trapframe->an
 static uint64
 argraw(int n)
 {
@@ -78,11 +80,12 @@ int
 argstr(int n, char *buf, int max)
 {
   uint64 addr;
-  if(argaddr(n, &addr) < 0)
+  if(argaddr(n, &addr) < 0) // addr = R[an]
     return -1;
   return fetchstr(addr, buf, max);
 }
 
+// Getting arguments from registers manually is conducive to unified interfaces.
 extern uint64 sys_chdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_dup(void);
@@ -105,14 +108,16 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 
+extern uint64 sys_trace(void);
+
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
-[SYS_exit]    sys_exit,
+[SYS_exit]    sys_exit, 
 [SYS_wait]    sys_wait,
 [SYS_pipe]    sys_pipe,
 [SYS_read]    sys_read,
 [SYS_kill]    sys_kill,
-[SYS_exec]    sys_exec,
+[SYS_exec]    sys_exec, // kernel/sysfile.c
 [SYS_fstat]   sys_fstat,
 [SYS_chdir]   sys_chdir,
 [SYS_dup]     sys_dup,
@@ -127,17 +132,55 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+
+[SYS_trace]   sys_trace,
 };
 
+
+static char *sys_name[] = {
+  "fork",   
+  "exit", 
+  "wait",
+  "pipe",
+  "read",
+  "kill",
+  "exec", 
+  "fstat",
+  "chdir",
+  "dup",    
+  "getpid",
+  "sbrk",
+  "sleep",
+  "uptime",
+  "open",
+  "write",
+  "mknod",
+  "unlink",
+  "link",
+  "mkdir",
+  "close",
+  "trace",
+};
+
+// ecall -> uservec -> usertrap -> syscall
 void
 syscall(void)
 {
   int num;
-  struct proc *p = myproc();
+  struct proc *p = myproc(); // get currrent process state 
 
-  num = p->trapframe->a7;
+  num = p->trapframe->a7; // retrive system call number.
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    p->trapframe->a0 = syscalls[num]();
+    // C calling convention on RISC-V places return values in a0.
+    // invoke system call; system calls conventionally return negative 
+	// numbers to inicate errors, and zero or poitive numbers for success.
+    p->trapframe->a0 = syscalls[num]();  
+	
+	// print trace information
+	if (bit_test(p->tracemask, num))
+	  printf("%d: syscall %s -> %d\n", 
+	          p->pid, sys_name[num - 1], p->trapframe->a0);
+
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
