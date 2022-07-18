@@ -108,7 +108,7 @@ uint64
 sys_fstat(void)
 {
   struct file *f;
-  uint64 st; // user pointer to struct stat
+  uint64 st; // user pointer to struct stat, see kernel/stat.h
 
   if(argfd(0, 0, &f) < 0 || argaddr(1, &st) < 0)
     return -1;

@@ -8,7 +8,7 @@
 
 struct cpu cpus[NCPU];
 
-struct proc proc[NPROC];
+struct proc proc[NPROC]; // processes list
 
 struct proc *initproc;
 
@@ -657,4 +657,18 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+// Count the number of processes whose state is not UNUSED
+int  
+countproc(void) {
+  struct proc *p;
+  int cnt = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock); // `->` priority is greater than `&`
+      if(p->state != UNUSED) cnt++;
+    release(&p->lock);
+  }
+  return cnt;
 }

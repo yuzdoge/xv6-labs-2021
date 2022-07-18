@@ -34,7 +34,7 @@ countfree()
       info.freemem);
     exit(1);
   }
-  sbrk(-((uint64)sbrk(0) - sz0));
+  sbrk(-((uint64)sbrk(0) - sz0)); // negative means free memory.
   return n;
 }
 

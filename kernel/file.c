@@ -94,7 +94,8 @@ filestat(struct file *f, uint64 addr)
     ilock(f->ip);
     stati(f->ip, &st);
     iunlock(f->ip);
-    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+	// addr is from user, out means kernel to user.
+    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0) // see kernel/vm.h
       return -1;
     return 0;
   }

@@ -86,15 +86,12 @@ kalloc(void)
 int 
 kfreemem(void) {
   struct run *r;
-  int n = 0;
+  int cnt = 0;
   acquire(&kmem.lock);
 
-  r = kmem.freelist;
-  while (r) {
-    n += PGSIZE;
-    r = r->next;
-  }
+  for (r = kmem.freelist; r; r = r->next) 
+    cnt++;
 
   release(&kmem.lock);
-  return n;
+  return 0;
 }
