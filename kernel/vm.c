@@ -117,6 +117,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
   if((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
+  // the address returned is physical address, it can be used directly under table page enable because of pa = va in xv6.
   return pa;
 }
 
