@@ -9,7 +9,7 @@
 /*
  * the kernel's page table.
  */
-pagetable_t kernel_pagetable;
+pagetable_t kernel_pagetable; // pagetable_t: typedef in kernel/riscv.h 
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
@@ -77,29 +77,47 @@ kvminithart()
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
+//
+//       64      39 38  30 29   21 20  12 11       0  
+// VA:  |     0    |  L2  |   L1  |  L0  |  offset  | 
+//       63        54 53   10 9   8 7 6 5 4 3 2 1 0 
+// PTE: |  Reserved  |  PPN  | RSW |D|A|G|U|X|W|R|V|
+//
+// *Note.The meaning of comments above is that the addres walk return
+// is physical address of PTE of L0, not a page or a page directory.
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
-  if(va >= MAXVA)
+  if(va >= MAXVA) // MAXVA is defined in kernel/riscv.h
     panic("walk");
 
+  // Only walk L2 and L1, not L0, which means that
+  // walk() will only create page directory if alloc == 1,
+  // and never check the flags of pte of L0.
+  // walk() will not revoke the page that allocated if current page allocation faild.
   for(int level = 2; level > 0; level--) {
-    pte_t *pte = &pagetable[PX(level, va)];
+    // PX means page table index extract.
+	// PX(leval, va) is a Macro defined in kernel/riscv.h,
+	// is used to extract page table indices from a virtual address. 
+    pte_t *pte = &pagetable[PX(level, va)]; // pte_t is uint64.
     if(*pte & PTE_V) {
-      pagetable = (pagetable_t)PTE2PA(*pte);
-    } else {
-      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+      pagetable = (pagetable_t)PTE2PA(*pte); // pagetable_addr = | PPN | 0 |
+    } else { // if PTE_V is set to zero. 
+      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0) // pde_t is uint64, defined in kernel/types.h
         return 0;
       memset(pagetable, 0, PGSIZE);
-      *pte = PA2PTE(pagetable) | PTE_V;
+	  // The PTE point to the new page and set the PTE_V. 
+	  // Note. the physical address that return from kalloc()
+	  // is align to PGSIZE 
+      *pte = PA2PTE(pagetable) | PTE_V;  
     }
   }
-  return &pagetable[PX(0, va)];
+  return &pagetable[PX(0, va)]; // here pagetable is point to L0 directory.
 }
 
-// Look up a virtual address, return the physical address,
+// Look up a virtual address, return the physical (page) address,
 // or 0 if not mapped.
-// Can only be used to look up user pages.
+// *Can only be used to look up user pages.
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
@@ -110,14 +128,14 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
+  if(pte == 0) // no L0 page table, it cannot merge with condition below, because of the null pointer.
     return 0;
-  if((*pte & PTE_V) == 0)
+  if((*pte & PTE_V) == 0) // page is not present. 
     return 0;
-  if((*pte & PTE_U) == 0)
+  if((*pte & PTE_U) == 0) // the page is inaccessible to user mode.
     return 0;
   pa = PTE2PA(*pte);
-  return pa;
+  return pa; // pa is the physical page address, not the physical address to which va refers.
 }
 
 // add a mapping to the kernel page table.
@@ -134,6 +152,23 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 // physical addresses starting at pa. va and size might not
 // be page-aligned. Returns 0 on success, -1 if walk() couldn't
 // allocate a needed page-table page.
+// Note. mapages will allocate more actrual size than 
+// specified by the argument `size`.
+//
+// e.g.
+// ideal: SIZE = va + size - 1 - va + 1 = size
+//    |   |     |   |
+// va |   |     |   |  
+//    |   | ... |   | va + size - 1
+//    |   |     |   |
+//    |   |     |   |
+// actual: SIZE = page_i_end - a + 1
+// a  |   |     |   | last
+//    |   |     |   |  
+//    |   | ... |   | 
+//    |   |     |   |
+//    |   |     |   | page_i_end 
+   
 int
 mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
@@ -143,14 +178,14 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   if(size == 0)
     panic("mappages: size");
   
-  a = PGROUNDDOWN(va);
+  a = PGROUNDDOWN(va); // PGROUNDDOWN is defined in riscv.h
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
-    if((pte = walk(pagetable, a, 1)) == 0)
+    if((pte = walk(pagetable, a, 1)) == 0) // page table allocation failed 
       return -1;
     if(*pte & PTE_V)
       panic("mappages: remap");
-    *pte = PA2PTE(pa) | perm | PTE_V;
+    *pte = PA2PTE(pa) | perm | PTE_V; // PA2PTE() is a macro to extract PPNfrom physical address.
     if(a == last)
       break;
     a += PGSIZE;
@@ -349,15 +384,23 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
-    va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    va0 = PGROUNDDOWN(dstva); // va0 = | VPN | 0 |
+    pa0 = walkaddr(pagetable, va0); // pa0 = | PPN | 0 |  
+    if(pa0 == 0) // not mapped or inaccessible to user
+      return -1;  
+	// Move bytes no more than PGSIZE at a time, 
+	// because it must check each page.
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
 
+	// Take an advantadge of the mapping `pa(va) = va`, 
+	// so it can work with MMU.
+	// Load and Store from or to a virtual address is not 
+	// dependent on `walk`(`walk` is only be used to create 
+	// a new page table and help check), it will be done correctly 
+	// by underlying hardware.
+    memmove((void *)(pa0 + (dstva - va0)), src, n); 
     len -= n;
     src += n;
     dstva = va0 + PGSIZE;

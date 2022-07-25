@@ -359,8 +359,8 @@ sfence_vma()
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
-// that have the high bit set.
-#define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+// that have the high bit set.(Sv39 requires 39->64 must signed-extension)
+#define MAXVA (1L << (9 + 9 + 9 + 12 - 1)) // 38 |1000...0000| 0, va < MAXVAmeans that max[va] = 37 |1111....1111| 0
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
