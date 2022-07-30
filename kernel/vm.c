@@ -359,6 +359,36 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+#ifdef LAB_PGTBL
+#define BULLET " .."
+
+static void 
+pgtblsearch(pagetable_t pagetable, int n) 
+{
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+	if (pte & PTE_V) {
+	  pagetable_t pa = (pagetable_t)PTE2PA(pte);
+
+	  for (int j = 0; j <= n; j++) 
+	    printf(BULLET); 
+	  printf("%d: pte %p pa %p\n",i, pte, pa);
+
+      // not leaf
+	  if ((pte & (PTE_R | PTE_W | PTE_X)) == 0)
+	    pgtblsearch(pa, n + 1); 
+	}
+  }
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  pgtblsearch(pagetable, 0);
+}
+#endif
+
 // Free user memory pages,
 // then free page-table pages.
 void
