@@ -16,35 +16,38 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 extern char trampoline[]; // trampoline.S
 
 // Make a direct-map page table for the kernel.
+// It must execute with paging turned off, because the pagetable has been no existed currently.
 pagetable_t
 kvmmake(void)
 {
   pagetable_t kpgtbl;
 
-  kpgtbl = (pagetable_t) kalloc();
+  // allocates a page of physical memory to hold the root page-table page. 
+  kpgtbl = (pagetable_t) kalloc(); 
   memset(kpgtbl, 0, PGSIZE);
 
   // uart registers
-  kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W); // pa(UART0) = UART0
 
   // virtio mmio disk interface
   kvmmap(kpgtbl, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
-  // PLIC
-  kvmmap(kpgtbl, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  // PLIC, Platform Level Interrupt Controller
+  kvmmap(kpgtbl, PLIC, PLIC, 0x400000, PTE_R | PTE_W); // 0x400000 = 4M = 1024 * 4K 
 
   // map kernel text executable and read-only.
-  kvmmap(kpgtbl, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  kvmmap(kpgtbl, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X); // etext is defined in kernel/kernel.ld
 
   // map kernel data and the physical RAM we'll make use of.
   kvmmap(kpgtbl, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
 
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
-  kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X); // pa(TRAMPOLINE) = trampoline, trampoline is defined in kernel/trampoline.S
 
   // map kernel stacks
-  proc_mapstacks(kpgtbl);
+  proc_mapstacks(kpgtbl); // proc_mapstacks() is defined in kernel/proc.c
+
   
   return kpgtbl;
 }
@@ -60,9 +63,10 @@ kvminit(void)
 // and enable paging.
 void
 kvminithart()
-{
-  w_satp(MAKE_SATP(kernel_pagetable));
-  sfence_vma();
+{ 
+  // see kernel/riscv.h
+  w_satp(MAKE_SATP(kernel_pagetable)); //csrw write satp.
+  sfence_vma(); // flush all TLB entries.
 }
 
 // Return the address of the PTE in page table pagetable
@@ -164,8 +168,8 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 //    |   |     |   |
 // actual: SIZE = page_i_end - a + 1
 // a  |   |     |   | last
-//    |   |     |   |  
-//    |   | ... |   | 
+// va |   |     |   |  
+//    |   | ... |   | va + size - 1
 //    |   |     |   |
 //    |   |     |   | page_i_end 
    
@@ -185,7 +189,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("mappages: remap");
-    *pte = PA2PTE(pa) | perm | PTE_V; // PA2PTE() is a macro to extract PPNfrom physical address.
+    *pte = PA2PTE(pa) | perm | PTE_V; // PA2PTE() is a macro to extract PPNfrom physical address; perm is flag.
     if(a == last)
       break;
     a += PGSIZE;
@@ -194,9 +198,12 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+
+/* the interface of uvm* used by user has no concept about pysical address */ 
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
-// Optionally free the physical memory.
+// Optionally free the physical memory with `do_free`.
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -211,7 +218,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
+    if(PTE_FLAGS(*pte) == PTE_V) // according to the riscv isa
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
@@ -252,6 +259,23 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
 
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
+//
+// e.g.
+// before: 
+//     assigend   unssigned
+//       |   |     |   |
+// oldsz |   |     |   |
+//       |   | ... |   | newsz
+//       |   |     |   |
+//       |   |     |   |
+// later: 
+//       -------assigned-----------
+//       |   |  |   | oldsz  |   |
+//       |   |  |   |        |   |
+//       |   |  |   |   ...  |   | newsz
+//       |   |  |   |        |   |
+//       |   |  |   |        |   |
+
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
@@ -261,14 +285,16 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   if(newsz < oldsz)
     return oldsz;
 
-  oldsz = PGROUNDUP(oldsz);
+  oldsz = PGROUNDUP(oldsz); // move to the begin of the next page
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
+	// if memory not enough, undo assigned.
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
     memset(mem, 0, PGSIZE);
+	// if fail to map, undo.
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
@@ -282,22 +308,38 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
 // process size.  Returns the new process size.
+// i.e.
+// before:
+//      |  |     |  |  
+// newsz|  | ... |  |
+//      |  |     |  | oldsz
+//      |  |     |  |
+//
+// later:
+//      |  | 
+// newsz|  | <--- remain this page, and return newsz
+//      |  |
+//      |  |
 uint64
 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
   if(newsz >= oldsz)
     return oldsz;
 
+  // if newsz and oldsz is not within a same page
   if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    // uvmunmap does not revoke the page table assigend, 
+	// only the page referenced by leaf pte.
+    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);   
   }
 
   return newsz;
 }
 
-// Recursively free page-table pages.
-// All leaf mappings must already have been removed.
+// Recursively free only page-table pages.It required that 
+// all leaf mappings must already have been removed.
+// Note. DFS
 void
 freewalk(pagetable_t pagetable)
 {
@@ -310,6 +352,7 @@ freewalk(pagetable_t pagetable)
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
+	  // leaf mapping has not been removed
       panic("freewalk: leaf");
     }
   }
@@ -322,6 +365,7 @@ void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
   if(sz > 0)
+    // unmap [start, start + npage)
     uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
   freewalk(pagetable);
 }

@@ -9,6 +9,7 @@ SECTIONS
    */
   . = 0x80000000;
 
+  /*  kernel text */
   .text : {
     *(.text .text.*)
     . = ALIGN(0x1000);
@@ -19,6 +20,7 @@ SECTIONS
     PROVIDE(etext = .);
   }
 
+  /*  kernel data */
   .rodata : {
     . = ALIGN(16);
     *(.srodata .srodata.*) /* do not need to distinguish this from .rodata */

@@ -32,12 +32,18 @@ struct spinlock wait_lock;
 void
 proc_mapstacks(pagetable_t kpgtbl) {
   struct proc *p;
-  
+
+//printf("----proc_mapstacks: TRAMPLINE: va = %p\n", TRAMPOLINE);  
+
   for(p = proc; p < &proc[NPROC]; p++) {
     char *pa = kalloc();
     if(pa == 0)
       panic("kalloc");
-    uint64 va = KSTACK((int) (p - proc));
+	// (int)(p - proc) = ((int)p - (int)proc) / sizeof(proc[0])
+    uint64 va = KSTACK((int) (p - proc)); // the macro KSTACK is defined in kernel/memlayout.h
+
+//printf("-----proc_mapstacks: va = %p\n", va);
+
     kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   }
 }
@@ -127,6 +133,17 @@ found:
     return 0;
   }
 
+#ifdef LAB_PGTBL
+  if ((p->usyscall = (struct usyscall *)kalloc()) == 0) {
+    freeproc(p);
+    release(&p->lock);
+	return 0;
+  }
+  memset(p->usyscall, 0 , sizeof(p->usyscall));
+  p->usyscall->pid = p->pid;
+#endif
+
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -153,6 +170,13 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+#ifdef LAB_PGTBL
+  if (p->usyscall)
+    kfree((void*)p->usyscall);
+  p->usyscall = 0;
+#endif
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -174,7 +198,7 @@ proc_pagetable(struct proc *p)
   pagetable_t pagetable;
 
   // An empty page table.
-  pagetable = uvmcreate();
+  pagetable = uvmcreate(); // be served as root page table
   if(pagetable == 0)
     return 0;
 
@@ -188,13 +212,32 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
-  // map the trapframe just below TRAMPOLINE, for trampoline.S.
+  // map the page including trapframe just below TRAPFRAME.
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
+    // undo the mapping to trampoline , but not free it with `do_free = 0`
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+	//free all page tables recursively.
     uvmfree(pagetable, 0);
     return 0;
   }
+
+#ifdef LAB_PGTBL
+  // USYSCALL page is allocated allocproc() but not here, because
+  // exec will also call this function.
+  if (mappages(pagetable, USYSCALL, PGSIZE, 
+               (uint64)(p->usyscall), PTE_R | PTE_U) < 0) {
+	// it cannot use uvmfree to free these two page together,
+	// because uvmfree can only free the consecutive range of va
+	// which have been assigend.
+	uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+	uvmunmap(pagetable, TRAPFRAME,  1, 0);
+
+    uvmfree(pagetable, 0);
+	return 0;
+  }
+
+#endif
 
   return pagetable;
 }
@@ -206,6 +249,9 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+ #ifdef LAB_PGTBL
+  uvmunmap(pagetable, USYSCALL, 1, 0);
+ #endif
   uvmfree(pagetable, sz);
 }
 
@@ -256,18 +302,18 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
-  if(n > 0){
+  if(n > 0){ // grow
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
-  } else if(n < 0){
+  } else if(n < 0){ //shrink
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
   return 0;
 }
 
-// Create a new process, copying the parent.
+// Create½3½1½1½1½1½1½1½1½1½1½1½1½1½1½1 a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
 fork(void)

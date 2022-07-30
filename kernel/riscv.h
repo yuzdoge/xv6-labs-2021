@@ -193,9 +193,15 @@ w_pmpaddr0(uint64 x)
   asm volatile("csrw pmpaddr0, %0" : : "r" (x));
 }
 
-// use riscv's sv39 page table scheme.
+// satp: 
+//  63    60 59    44 43       0
+// |  MODE  |  ASID  |    PPN   |
+//
+// use riscv's sv39 page table scheme. 
+// value of MODE filed indicating sv39 in satp register is 8. 
 #define SATP_SV39 (8L << 60)
 
+// | 1000 | 0000 0000 0000 0000 | PPN |
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12))
 
 // supervisor address translation and protection;

@@ -1,6 +1,6 @@
 // Format of an ELF executable file
 
-#define ELF_MAGIC 0x464C457FU  // "\x7FELF" in little endian
+#define ELF_MAGIC 0x464C457FU  // "\x7FELF" in little endian, `\x7F`,i.e, `0x7F`, represent delete character.
 
 // File header
 struct elfhdr {
@@ -9,13 +9,13 @@ struct elfhdr {
   ushort type;
   ushort machine;
   uint version;
-  uint64 entry;
-  uint64 phoff;
+  uint64 entry; // the entry(a va) of the program
+  uint64 phoff; // (the first) program section header offset
   uint64 shoff;
   uint flags;
   ushort ehsize;
   ushort phentsize;
-  ushort phnum;
+  ushort phnum; // program section (header) number
   ushort shentsize;
   ushort shnum;
   ushort shstrndx;
@@ -23,13 +23,13 @@ struct elfhdr {
 
 // Program section header
 struct proghdr {
-  uint32 type;
+  uint32 type; // the value of type is below
   uint32 flags;
   uint64 off;
-  uint64 vaddr;
+  uint64 vaddr; // the va that this section will place on
   uint64 paddr;
-  uint64 filesz;
-  uint64 memsz;
+  uint64 filesz; // the actual size that the section hold and should be loaded
+  uint64 memsz; // the size of memory should be allocated, memsz >= filesz
   uint64 align;
 };
 

@@ -57,6 +57,14 @@
 
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
+// | Trampoline |
+// | Guard page |
+// | Guard page | 
+// | Kstack 0   | 
+// | Guard page | 
+// | Kstack 1   | 
+// |     ...    |
+// ----PHYSTOP---
 #define KSTACK(p) (TRAMPOLINE - (p)*2*PGSIZE - 3*PGSIZE)
 
 // User memory layout.
