@@ -77,10 +77,27 @@ sys_sleep(void)
 
 
 #ifdef LAB_PGTBL
+#define MAXPG 32
+
 int
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
+  uint64 uaddr;
+  int n;
+  uint64 maskptr;
+
+  if ((argaddr(0, &uaddr) < 0) ||  
+      (argint(1, &n)      < 0) ||
+	  (argaddr(2, &maskptr)  < 0)) {
+    return -1;
+  }
+
+  n = n < MAXPG ? n : MAXPG;
+
+  pagetable_t pg = myproc()->pagetable;
+  if (pgaccess(pg, uaddr, n, maskptr) < 0)
+    return -1;
+
   return 0;
 }
 #endif

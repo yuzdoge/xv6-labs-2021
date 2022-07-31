@@ -387,6 +387,40 @@ vmprint(pagetable_t pagetable)
   printf("page table %p\n", pagetable);
   pgtblsearch(pagetable, 0);
 }
+
+
+int
+pgaccess(pagetable_t pagetable, uint64 va, int pgn, uint64 maskptr)
+{
+  bitmask_t mask = 0;
+  pte_t *pte;
+
+  if (va >= MAXVA)
+    return -1;
+ 
+  va = PGROUNDDOWN(va);
+  for (int i = 0; i < pgn; i++, va += PGSIZE) {
+    pte = walk(pagetable, va, 0);
+    if (pte == 0)
+      return -1;
+    if (((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0))
+	  return -1;
+
+	if (*pte & PTE_A) {
+	  mask = mask | (1 << i);
+	  *pte &= ~PTE_A;
+	}
+  }
+
+  if (copyout(pagetable, maskptr, (char *)&mask, sizeof(mask)) < 0)
+    return -1; // maskptr is a invalid user address.
+
+  // if maskptr within [PGROUNDDOWN(va), PGROUNDDOWN(va) + pgn), the PTE_A bit of 
+  // the leaf PTE pointing to the page relevant to maskptr will be set again when
+  // pgaccess return.
+
+  return 0;
+}
 #endif
 
 // Free user memory pages,

@@ -8,3 +8,7 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 typedef uint64 pde_t;
+
+#ifdef LAB_PGTBL
+typedef uint bitmask_t;
+#endif
