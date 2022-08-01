@@ -39,8 +39,12 @@ w_mepc(uint64 x)
 }
 
 // Supervisor Status Register, sstatus
+//  SXLEN-1 SXLEN-2  34 33  32 31  20 19  18   17
+// |  SD  |    WPRI    |  UXL | WPRI |MXR|SUM|WPRI|
+//  16     15 14     13 12   9  8  7    6   5   4   3  2  1   0
+// | XS[1:0] | FS[1:0] | WPRI |SPP| WPRI |SPIE|UPIE|WPRI|SIE|UIE|
 
-#define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User
+#define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User, controls to what mode sret returns
 #define SSTATUS_SPIE (1L << 5) // Supervisor Previous Interrupt Enable
 #define SSTATUS_UPIE (1L << 4) // User Previous Interrupt Enable
 #define SSTATUS_SIE (1L << 1)  // Supervisor Interrupt Enable
@@ -114,6 +118,7 @@ w_mie(uint64 x)
 // supervisor exception program counter, holds the
 // instruction address to which a return from
 // exception will go.
+// | spec |
 static inline void 
 w_sepc(uint64 x)
 {
@@ -160,6 +165,8 @@ w_mideleg(uint64 x)
 
 // Supervisor Trap-Vector Base Address
 // low two bits are mode.
+//  SXLEN-1                  2 1          0
+// | BASE[SXLEN-1 : 2] (WARL) | MODE(WARL) |
 static inline void 
 w_stvec(uint64 x)
 {
@@ -234,6 +241,7 @@ w_mscratch(uint64 x)
 }
 
 // Supervisor Trap Cause
+// RISC-V puts a number here that describes the reason for the trap
 static inline uint64
 r_scause()
 {
