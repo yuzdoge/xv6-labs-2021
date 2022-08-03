@@ -415,10 +415,6 @@ pgaccess(pagetable_t pagetable, uint64 va, int pgn, uint64 maskptr)
   if (copyout(pagetable, maskptr, (char *)&mask, sizeof(mask)) < 0)
     return -1; // maskptr is a invalid user address.
 
-  // if maskptr within [PGROUNDDOWN(va), PGROUNDDOWN(va) + pgn), the PTE_A bit of 
-  // the leaf PTE pointing to the page relevant to maskptr will be set again when
-  // pgaccess return.
-
   return 0;
 }
 #endif
