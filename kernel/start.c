@@ -50,7 +50,7 @@ start()
   int id = r_mhartid();
   w_tp(id);
 
-  // switch to supervisor mode and jump to main(), because exception raise up.
+  // switch to supervisor mode and jump to main(), because because the mret will return to where mepc points.
   asm volatile("mret");
 }
 
