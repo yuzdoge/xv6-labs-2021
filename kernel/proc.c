@@ -180,7 +180,7 @@ proc_pagetable(struct proc *p)
 
   // map the trampoline code (for system call return)
   // at the highest user virtual address.
-  // only the supervisor uses it, on the way
+  // *only the supervisor uses it, on the way
   // to/from user space, so not PTE_U.
   if(mappages(pagetable, TRAMPOLINE, PGSIZE,
               (uint64)trampoline, PTE_R | PTE_X) < 0){
