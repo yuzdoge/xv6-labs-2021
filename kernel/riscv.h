@@ -39,8 +39,12 @@ w_mepc(uint64 x)
 }
 
 // Supervisor Status Register, sstatus
+//  SXLEN-1 SXLEN-2  34 33  32 31  20 19  18   17
+// |  SD  |    WPRI    |  UXL | WPRI |MXR|SUM|WPRI|
+//  16     15 14     13 12   9  8  7    6   5   4   3  2  1   0
+// | XS[1:0] | FS[1:0] | WPRI |SPP| WPRI |SPIE|UPIE|WPRI|SIE|UIE|
 
-#define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User
+#define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User, controls to what mode sret returns
 #define SSTATUS_SPIE (1L << 5) // Supervisor Previous Interrupt Enable
 #define SSTATUS_UPIE (1L << 4) // User Previous Interrupt Enable
 #define SSTATUS_SIE (1L << 1)  // Supervisor Interrupt Enable
@@ -114,6 +118,7 @@ w_mie(uint64 x)
 // supervisor exception program counter, holds the
 // instruction address to which a return from
 // exception will go.
+// | spec |
 static inline void 
 w_sepc(uint64 x)
 {
@@ -160,6 +165,8 @@ w_mideleg(uint64 x)
 
 // Supervisor Trap-Vector Base Address
 // low two bits are mode.
+//  SXLEN-1                  2 1          0
+// | BASE[SXLEN-1 : 2] (WARL) | MODE(WARL) |
 static inline void 
 w_stvec(uint64 x)
 {
@@ -193,9 +200,15 @@ w_pmpaddr0(uint64 x)
   asm volatile("csrw pmpaddr0, %0" : : "r" (x));
 }
 
-// use riscv's sv39 page table scheme.
+// satp: 
+//  63    60 59    44 43       0
+// |  MODE  |  ASID  |    PPN   |
+//
+// use riscv's sv39 page table scheme. 
+// value of MODE filed indicating sv39 in satp register is 8. 
 #define SATP_SV39 (8L << 60)
 
+// | 1000 | 0000 0000 0000 0000 | PPN |
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12))
 
 // supervisor address translation and protection;
@@ -228,6 +241,7 @@ w_mscratch(uint64 x)
 }
 
 // Supervisor Trap Cause
+// RISC-V puts a number here that describes the reason for the trap
 static inline uint64
 r_scause()
 {
@@ -344,6 +358,8 @@ sfence_vma()
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
 
+#define PTE_A (1L << 6) // 1 -> this page has been accessed since the last time the A bit was cleared
+
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
@@ -359,8 +375,8 @@ sfence_vma()
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
-// that have the high bit set.
-#define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+// that have the high bit set.(Sv39 requires 39->64 must signed-extension)
+#define MAXVA (1L << (9 + 9 + 9 + 12 - 1)) // 38 |1000...0000| 0, va < MAXVAmeans that max[va] = 37 |1111....1111| 0
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs

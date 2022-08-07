@@ -202,6 +202,8 @@ uvmcreate()
 // Load the user initcode into address 0 of pagetable,
 // for the very first process.
 // sz must be less than a page.
+// *initcode is unlike other user process, it has no user process virtual memory model.
+// it has only one page to store `data` and `text` section.
 void
 uvminit(pagetable_t pagetable, uchar *src, uint sz)
 {

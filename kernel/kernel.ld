@@ -11,7 +11,7 @@ SECTIONS
 
   .text : {
     *(.text .text.*)
-    . = ALIGN(0x1000);
+    . = ALIGN(0x1000); /* align to a page boundary */
     _trampoline = .;
     *(trampsec)
     . = ALIGN(0x1000);

@@ -8,6 +8,13 @@
 .globl kernelvec
 .align 4
 kernelvec:
+# here SIE will be set zero by hardware.
+
+# The reason why save user registers in the stack of user, 
+# like here do for kernel is that, not all languages and  programs
+# will set sp or has stack, kernel should not assume this.
+
+		// sp points to the top of (process's or kernel's) kernel stack
         // make room to save registers.
         addi sp, sp, -256
 

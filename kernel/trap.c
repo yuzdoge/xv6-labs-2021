@@ -32,6 +32,7 @@ trapinithart(void)
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
+// Note. xv6 exception and system call are two semantics.
 //
 void
 usertrap(void)
@@ -47,7 +48,11 @@ usertrap(void)
 
   struct proc *p = myproc();
   
-  // save user program counter.
+  // save user program counter, because usertrap() might 
+  // call yield to switch to another process's kernel thread,
+  // and that process might return to user space, in the process
+  // of which it will modify sepc, when timer interrrupt occures 
+  // after intr_on().
   p->trapframe->epc = r_sepc();
   
   if(r_scause() == 8){
@@ -60,6 +65,7 @@ usertrap(void)
     // but we want to return to the next instruction.
     p->trapframe->epc += 4;
 
+	// when a trap occurs, all interrupts(SIE) will also be disabled by hardware.
     // an interrupt will change sstatus &c registers,
     // so don't enable until done with those registers.
     intr_on();
@@ -68,6 +74,7 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    // xv6 does not handle exceptions, instead kills processes.
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -85,6 +92,7 @@ usertrap(void)
 
 //
 // return to user space
+// not only can usertrap() call usertrapret()
 //
 void
 usertrapret(void)
@@ -92,8 +100,9 @@ usertrapret(void)
   struct proc *p = myproc();
 
   // we're about to switch the destination of traps from
-  // kerneltrap() to usertrap(), so turn off interrupts until
-  // we're back in user space, where usertrap() is correct.
+  // kerneltrap() to usertrap() by modifying `stvec`, so 
+  // turn off interrupts until we're back in user space, 
+  // where usertrap() is correct.
   intr_off();
 
   // send syscalls, interrupts, and exceptions to trampoline.S
@@ -102,9 +111,9 @@ usertrapret(void)
   // set up trapframe values that uservec will need when
   // the process next re-enters the kernel.
   p->trapframe->kernel_satp = r_satp();         // kernel page table
-  p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
+  p->trapframe->kernel_sp = p->kstack + PGSIZE; // the top of process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;
-  p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid()
+  p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid(), tp is a register, which might be modified by user.
 
   // set up the registers that trampoline.S's sret will use
   // to get to user space.
@@ -115,7 +124,7 @@ usertrapret(void)
   x |= SSTATUS_SPIE; // enable interrupts in user mode
   w_sstatus(x);
 
-  // set S Exception Program Counter to the saved user pc.
+  // set S Exception Program Counter to the saved user pc, for sret.
   w_sepc(p->trapframe->epc);
 
   // tell trampoline.S the user page table to switch to.
@@ -125,6 +134,7 @@ usertrapret(void)
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
   uint64 fn = TRAMPOLINE + (userret - trampoline);
+  // cat fn to the type of function pointer `void (*)(uint64, uint64)`
   ((void (*)(uint64,uint64))fn)(TRAPFRAME, satp);
 }
 
@@ -140,7 +150,7 @@ kerneltrap()
   
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
-  if(intr_get() != 0)
+  if(intr_get() != 0) // ensure interrupts disableed
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
@@ -155,6 +165,7 @@ kerneltrap()
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
+  // only restore those which need to be used.
   w_sepc(sepc);
   w_sstatus(sstatus);
 }

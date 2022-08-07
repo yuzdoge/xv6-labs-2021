@@ -62,7 +62,7 @@ procinit(void)
 int
 cpuid()
 {
-  int id = r_tp();
+  int id = r_tp(); // read hartid
   return id;
 }
 

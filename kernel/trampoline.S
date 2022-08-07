@@ -64,10 +64,10 @@ uservec:
         csrr t0, sscratch
         sd t0, 112(a0)
 
-        # restore kernel stack pointer from p->trapframe->kernel_sp
+        # restore kernel stack pointer from p->trapframe->kernel_sp, to provide a kernel stack forC code, e.g, usertrap()
         ld sp, 8(a0)
 
-        # make tp hold the current hartid, from p->trapframe->kernel_hartid
+        # make tp(thread pointer) hold the current hartid, from p->trapframe->kernel_hartid
         ld tp, 32(a0)
 
         # load the address of usertrap(), p->trapframe->kernel_trap
@@ -98,8 +98,8 @@ userret:
 
         # put the saved user a0 in sscratch, so we
         # can swap it with our a0 (TRAPFRAME) in the last step.
-        ld t0, 112(a0)
-        csrw sscratch, t0
+        ld t0, 112(a0) # t0 = p->trapframe->a0
+        csrw sscratch, t0 # sscratch = t0 = p->trapframe->a0
 
         # restore all but a0 from TRAPFRAME
         ld ra, 40(a0)
@@ -133,9 +133,10 @@ userret:
         ld t5, 272(a0)
         ld t6, 280(a0)
 
-	# restore user a0, and save TRAPFRAME in sscratch
-        csrrw a0, sscratch, a0
+	# *restore user a0, and save TRAPFRAME in sscratch
+        csrrw a0, sscratch, a0 # swap sscratch and a0
         
         # return to user mode and user pc.
         # usertrapret() set up sstatus and sepc.
+		# when sret is execured, SIE is set to SPIE, then SPIE is set to 1
         sret
