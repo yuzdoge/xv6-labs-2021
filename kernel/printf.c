@@ -121,6 +121,9 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+#ifdef LAB_TRAPS
+  backtrace();
+#endif
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -132,3 +135,34 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+#ifdef LAB_TRAPS 
+//
+// Warn: if it is a leaf function, `ra` will not be stored(because `ra` is saved by caller), 
+// and a leaf function is not a caller. Instead, `fp` will be saved where `ra` should have
+// been saved.
+// 
+void
+backtrace(void)
+{
+  // va of stack page(kernel and user processs) is PGSIZE boundary. 
+  uint64 fp = r_fp();
+  uint64 stackpage_top = PGROUNDUP(fp); // top address
+  uint64 stackpage_btm = PGROUNDDOWN(fp); // bottom address
+
+  printf("backtrace:\n");
+  for (; ;) {
+  
+    // note. fp is point to the start address of stack **obove**.
+	// so, fp <= stackpage_btm insted of fp < stackpage_btm.
+    if (fp >= stackpage_top || fp <= stackpage_btm)
+	  break;
+
+    uint64 ra = fp - 8;
+	printf("%p\n", *((uint64 *)ra));
+
+	uint64 fp_pre = fp - 16;
+	fp = *((uint64 *)fp_pre);
+  }
+}
+#endif
