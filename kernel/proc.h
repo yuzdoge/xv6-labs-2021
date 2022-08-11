@@ -82,6 +82,59 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+#ifdef LAB_TRAPS
+struct alarmstate {
+  uint ticks;                   // Total counts of timer interruption
+  uint rticks;                  // Rest ticks
+  uint64 handler;               // Handler function 
+};
+
+// save all user registers.
+struct sigtrapframe {
+  uint64 ra;
+  uint64 sp;
+  uint64 gp;
+  uint64 tp;
+  uint64 t0;
+  uint64 t1;
+  uint64 t2;
+  uint64 s0;
+  uint64 s1;
+  uint64 a0;
+  uint64 a1;
+  uint64 a2;
+  uint64 a3;
+  uint64 a4;
+  uint64 a5;
+  uint64 a6;
+  uint64 a7;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+  uint64 t3;
+  uint64 t4;
+  uint64 t5;
+  uint64 t6;
+
+  uint64 epc;
+};
+
+static inline void
+saveregs(uint64 *dst, const uint64 *src)
+{
+  for (int i = 1; i < 32; i++)
+    *dst++ = *src++; 
+}
+
+#endif
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -105,4 +158,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+#ifdef LAB_TRAPS
+  struct alarmstate alarmst;
+  struct sigtrapframe sigtrapframe;
+  int    entrant;
+#endif
 };

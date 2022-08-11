@@ -117,6 +117,10 @@ allocproc(void)
   return 0;
 
 found:
+#ifdef LAB_TRAPS 
+  memset(&(p->alarmst), 0, sizeof(p->alarmst));
+  p->entrant = 0;
+#endif
   p->pid = allocpid();
   p->state = USED;
 

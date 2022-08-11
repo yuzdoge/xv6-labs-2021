@@ -25,6 +25,7 @@ main(int argc, char *argv[])
   test1();
   test2();
   exit(0);
+
 }
 
 volatile static int count;
@@ -42,11 +43,12 @@ periodic()
 void
 test0()
 {
-  int i;
+  uint64 i;
+  uint64 max = 1000*500000;
   printf("test0 start\n");
   count = 0;
   sigalarm(2, periodic);
-  for(i = 0; i < 1000*500000; i++){
+  for(i = 0; i < max; i++){
     if((i % 1000000) == 0)
       write(2, ".", 1);
     if(count > 0)

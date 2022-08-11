@@ -23,6 +23,12 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+#ifdef LAB_TRAPS
+// foo() is not foo(void). Declaration foo() menas that 
+// when the this function defined, it may or may not have parameters.
+int sigalarm(int ticks, void (*handler)()); 
+int sigreturn(void);
+#endif
 
 // ulib.c
 int stat(const char*, struct stat*);

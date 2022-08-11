@@ -99,3 +99,37 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+#ifdef LAB_TRAPS
+uint64
+sys_sigalarm(void) 
+{
+  int ticks;
+  uint64 handler;
+  struct proc *p = myproc();
+
+  if (argint(0, &ticks) < 0 || argaddr(1, &handler) < 0)
+    return -1;
+
+  p->alarmst.ticks = (uint)ticks;  
+  p->alarmst.rticks = (uint)ticks;
+  p->alarmst.handler = handler;
+//printf("aft:ticks = %d, rticks = %d handler=%p\n", p->alarmst.ticks, p->alarmst.rticks, p->alarmst.handler);
+   
+  return 0;
+}
+
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  
+  // resume the state for last signal trap
+  saveregs(&(p->trapframe->ra), &(p->sigtrapframe.ra));
+  p->trapframe->epc = p->sigtrapframe.epc;
+
+  p->entrant = 0;
+  return 0;
+}
+#endif

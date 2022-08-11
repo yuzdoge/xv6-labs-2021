@@ -84,8 +84,34 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+
+#ifdef LAB_TRAPS
+    // it cannot check the address of handler which might be 0.
+    if (p->alarmst.ticks) {
+//printf("hander:%p rticks:%d\n",p->alarmst.handler, p->alarmst.rticks);
+      if (p->alarmst.rticks != 0) {
+	    p->alarmst.rticks--;
+	  } else if (!p->entrant) {
+	    // save the state
+	    p->sigtrapframe.epc = p->trapframe->epc;
+		saveregs(&(p->sigtrapframe.ra), &(p->trapframe->ra));
+/*
+uint64 *p1 = &(p->sigtrapframe.ra), *p2 = &(p->trapframe->ra);
+for ( int i = 1; i < 32; i++, p1++, p2++) printf("reg:%d:%d\n", *p1, *p2);
+*/
+	    p->trapframe->epc = p->alarmst.handler;
+
+		// re-arm
+	    p->alarmst.rticks = p->alarmst.ticks;
+
+		p->entrant = 1;
+	  } 
+	}
+#endif
+
     yield();
+  }
 
   usertrapret();
 }
