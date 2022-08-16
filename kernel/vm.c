@@ -114,7 +114,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
   if((*pte & PTE_V) == 0)
     return 0;
-  if((*pte & PTE_U) == 0)
+  if((*pte & PTE_U) == 0) // As for user pages, PTE_U will be used with PTE_W and PTE_R togeter.
     return 0;
   pa = PTE2PA(*pte);
   return pa;
@@ -175,13 +175,13 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
-#ifdef LAB_COW
+#ifdef LAB_LZAL
       continue;
 #else
       // In fact, this panic will never take place 
-	  // in previous labs (eager allocation), 
-	  // because if user need memory, kernel will 
-	  // allocate it to user immediately. 
+      // in previous labs (eager allocation), 
+      // because if user need memory, kernel will 
+      // allocate it to user immediately. 
       panic("uvmunmap: not mapped");
 #endif
     if(PTE_FLAGS(*pte) == PTE_V)
@@ -311,7 +311,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -320,6 +319,26 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
+
+#ifdef LAB_COW
+    
+    if (flags & (PTE_W | PTE_COW))
+      flags = (flags & ~PTE_W) | PTE_COW;
+
+    if (mappages(new, i, PGSIZE, pa, flags) != 0) {
+      uvmunmap(new, 0, i / PGSIZE, 0); 
+      return -1;
+    }
+
+    *pte = PA2PTE(pa) | flags;
+
+    cntinc(pa); 
+  }
+  return 0;
+
+#else
+
+    char *mem;
     if((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
@@ -333,6 +352,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
+
+#endif
+
 }
 
 // mark a PTE invalid for user access.
@@ -358,9 +380,27 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+#ifdef LAB_COW
+    if (va0 >= MAXVA)
+      return -1;
+    pte_t *pte = walk(pagetable, va0, 0);
+    if ((pte == 0) || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) ==0))
+      return -1;
+    uint64 pa = PTE2PA(*pte);
+    if (*pte & PTE_COW) {
+      uint flags = (PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W;
+      pa0 = cowalloc(pa); 
+      if (pa0 == 0)
+        return -1;
+      *pte = PA2PTE(pa0) | flags;
+    } else {
+      pa0 = pa;
+    } 
+#else
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+#endif
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;

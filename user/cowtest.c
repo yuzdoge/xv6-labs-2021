@@ -9,6 +9,7 @@
 // allocate more than half of physical memory,
 // then fork. this will fail in the default
 // kernel, which does not support copy-on-write.
+// this test can be used for allocation without free.
 void
 simpletest()
 {
@@ -22,10 +23,12 @@ simpletest()
     printf("sbrk(%d) failed\n", sz);
     exit(-1);
   }
+//printf("\ncheck 1: ok\n");
 
   for(char *q = p; q < p + sz; q += 4096){
     *(int*)q = getpid();
   }
+//printf("check 2: ok\n");
 
   int pid = fork();
   if(pid < 0){
@@ -33,10 +36,13 @@ simpletest()
     exit(-1);
   }
 
-  if(pid == 0)
+  if(pid == 0) {
+//printf("check 3: ok\n");
     exit(0);
+  }
 
   wait(0);
+//printf("check 4: ok\n");
 
   if(sbrk(-sz) == (char*)0xffffffffffffffffL){
     printf("sbrk(-%d) failed\n", sz);
@@ -70,12 +76,14 @@ threetest()
     printf("fork failed\n");
     exit(-1);
   }
+//printf("\ncheck 1: ok\n");
   if(pid1 == 0){
     pid2 = fork();
     if(pid2 < 0){
       printf("fork failed");
       exit(-1);
     }
+//printf("check 2: ok\n");
     if(pid2 == 0){
       for(char *q = p; q < p + (sz/5)*4; q += 4096){
         *(int*)q = getpid();
@@ -86,11 +94,13 @@ threetest()
           exit(-1);
         }
       }
+//printf("check 3: ok\n");
       exit(-1);
     }
     for(char *q = p; q < p + (sz/2); q += 4096){
       *(int*)q = 9999;
     }
+//printf("check 4: ok\n");
     exit(0);
   }
 
@@ -98,6 +108,7 @@ threetest()
     *(int*)q = getpid();
   }
 
+//printf("check 5: ok\n");
   wait(0);
 
   sleep(1);
@@ -108,6 +119,7 @@ threetest()
       exit(-1);
     }
   }
+//printf("check 6: ok\n");
 
   if(sbrk(-sz) == (char*)0xffffffffffffffffL){
     printf("sbrk(-%d) failed\n", sz);
@@ -136,29 +148,34 @@ filetest()
       printf("pipe() failed\n");
       exit(-1);
     }
+//printf("check 1: ok\n");
     int pid = fork();
     if(pid < 0){
       printf("fork failed\n");
       exit(-1);
     }
+//printf("check 2: ok\n");
     if(pid == 0){
       sleep(1);
       if(read(fds[0], buf, sizeof(i)) != sizeof(i)){
         printf("error: read failed\n");
         exit(1);
       }
+//printf("check 3: ok\n");
       sleep(1);
       int j = *(int*)buf;
       if(j != i){
         printf("error: read the wrong value\n");
         exit(1);
       }
+//printf("check 4: ok\n");
       exit(0);
     }
     if(write(fds[1], &i, sizeof(i)) != sizeof(i)){
       printf("error: write failed\n");
       exit(-1);
     }
+//printf("check 5: ok\n");
   }
 
   int xstatus = 0;
@@ -168,6 +185,7 @@ filetest()
       exit(1);
     }
   }
+//printf("check 6: ok\n");
 
   if(buf[0] != 99){
     printf("error: child overwrote parent\n");

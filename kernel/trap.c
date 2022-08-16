@@ -67,7 +67,7 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-#ifdef LAB_COW
+#ifdef LAB_LZAL
   } else if (r_scause() == 15){
     uint64 va = r_stval();
 	printf("page fault %p\n", va);
@@ -82,8 +82,67 @@ usertrap(void)
 		p->killed = 1;
 	  }
 	}
+#elif LAB_COW
+  } else if (r_scause() == 15) {
+// *Warn: it must used spinlock when trap here. Because xv6 is running at
+// a multi-cores CPU, disable interrupt can only prevent the local hart
+// from switching to another process, but cannot prevent race with other harts.
+    uint64 va = r_stval();
+    if (va >= MAXVA)
+      goto err;
+    pte_t *pte = walk(p->pagetable, va, 0);
+    if (pte == 0)
+      goto err; //panic("usertrap(): pte should exist");
+    if ((*pte & PTE_V) == 0)
+      goto err; //panic("usertrap(): page not present");
+    if ((*pte & PTE_U) == 0)
+      goto err; //panic("usertrap(): page cannot access by user");
+
+    if (*pte & PTE_COW) {
+      uint64 pa = PTE2PA(*pte);
+      uint flags = (PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W;
+//printf("COW: va=%p, pa=%p\n", va, pa);
+      uint64 ka = cowalloc(pa);
+      if (ka == 0) {
+//printf("COW: 1\n");
+        p->killed = 1;
+      } else {
+        *pte = PA2PTE(ka) | flags;
+      }
+      
+/*
+      if (getcnt(pa) > 1) {
+        uint64 ka = (uint64)kalloc();
+        if (ka == 0) {
+//printf("COW: killed\n");
+          p->killed = 1;
+        } else {
+//printf("COW: va=%p, pa=%p, cnt=%d\n", va, pa, getcnt(pa));
+if (pa == ka) panic("???");
+          memmove((char *)ka, (char *)pa, PGSIZE);
+//if (getcnt(pa) <=1) panic("fk0");
+          *pte = PA2PTE(ka) | flags;
+//if (getcnt(pa) <=1) panic("fk1");
+//if (*pte & PTE_W) printf("has modify\n"); else panic("fk!");
+          cntdec(pa); // no lock
+if (getcnt(pa) == 0) panic("fk2");
+//printf("COW: va=%p, pa=%p, cnt=%d\n", va, pa, getcnt(pa));
+        } 
+      } else {
+        if (getcnt(pa) == 0){
+//printf("here:va=%p, pa=%p\n", va, pa);
+          panic("usertrap(): should not be 0");
+        }
+//printf("COW: 1\n");
+        *pte = PA2PTE(pa) | flags;
+      }
+*/
+    } else {
+      panic("usertrap(): not COW");
+    }
 #endif
   } else {
+err:
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;

@@ -26,6 +26,7 @@ SECTIONS
     *(.rodata .rodata.*)
   }
 
+  /* store global or static variable which is initialize to not 0 */
   .data : {
     . = ALIGN(16);
     *(.sdata .sdata.*) /* do not need to distinguish this from .data */
@@ -33,6 +34,11 @@ SECTIONS
     *(.data .data.*)
   }
 
+  /*
+   * block storage start (better save space) 
+   * store global or static variable which is 
+   *uninitialized or initialized to 0. 
+  */
   .bss : {
     . = ALIGN(16);
     *(.sbss .sbss.*) /* do not need to distinguish this from .bss */
