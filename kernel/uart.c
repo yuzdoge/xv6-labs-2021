@@ -93,6 +93,7 @@ uartputc(int c)
       ;
   }
 
+  // ring-buffer, full flag set according the length of buffer.
   while(1){
     if(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){
       // buffer is full.
@@ -173,7 +174,7 @@ uartgetc(void)
   }
 }
 
-// handle a uart interrupt, raised because input has
+// handle a uart interrupt, *raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from trap.c.
 void

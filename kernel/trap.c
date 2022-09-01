@@ -257,7 +257,7 @@ devintr()
      (scause & 0xff) == 9){
     // this is a supervisor external interrupt, via PLIC.
 
-    // irq indicates which device interrupted.
+    // irq indicates which device interrupted.(interruption number)
     int irq = plic_claim();
 
     if(irq == UART0_IRQ){

@@ -228,6 +228,8 @@ w_mscratch(uint64 x)
 }
 
 // Supervisor Trap Cause
+//  63      62					 0
+// |Interrupt|exeption code(WLRL)|
 static inline uint64
 r_scause()
 {

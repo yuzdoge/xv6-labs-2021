@@ -20,11 +20,19 @@ initlock(struct spinlock *lk, char *name)
 // Loops (spins) until the lock is acquired.
 void
 acquire(struct spinlock *lk)
-{
+{ 
+  // if not disable interrupts and *xv6 runs on only one core, 
+  // maybe in the interrupts handler, the same lock is acquired, 
+  // in this case, intterupt handler will not yield the core, which 
+  // will which cause deadlock.
   push_off(); // disable interrupts to avoid deadlock.
+
+  // help detect deadlock
   if(holding(lk))
     panic("acquire");
 
+  // Note. `__sync_*` are built-in functions of gcc, which are indepentent
+  // on any libraries.
   // On RISC-V, sync_lock_test_and_set turns into an atomic swap:
   //   a5 = 1
   //   s1 = &lk->locked
@@ -36,6 +44,7 @@ acquire(struct spinlock *lk)
   // past this point, to ensure that the critical section's memory
   // references happen strictly after the lock is acquired.
   // On RISC-V, this emits a fence instruction.
+  // Note. before memory access, compution will be computed correctly.
   __sync_synchronize();
 
   // Record info about lock acquisition for holding() and debugging.
@@ -62,7 +71,7 @@ release(struct spinlock *lk)
   // Release the lock, equivalent to lk->locked = 0.
   // This code doesn't use a C assignment, since the C standard
   // implies that an assignment might be implemented with
-  // multiple store instructions.
+  // multiple store instructions(store instruction maybe not a atomic instr).
   // On RISC-V, sync_lock_release turns into an atomic swap:
   //   s1 = &lk->locked
   //   amoswap.w zero, zero, (s1)
@@ -88,8 +97,12 @@ holding(struct spinlock *lk)
 void
 push_off(void)
 {
+  // don't worry about being intterupted when calling intr_get(),
+  // if push_off() was intterupted, in xv6, this will still a correct 
+  // value after swiching from a intteruption, because the state will be 
+  // resumed exited from a intteruption.
   int old = intr_get();
-
+  
   intr_off();
   if(mycpu()->noff == 0)
     mycpu()->intena = old;
@@ -100,10 +113,12 @@ void
 pop_off(void)
 {
   struct cpu *c = mycpu();
+  // help debug
   if(intr_get())
     panic("pop_off - interruptible");
   if(c->noff < 1)
     panic("pop_off");
+  // descrese noff
   c->noff -= 1;
   if(c->noff == 0 && c->intena)
     intr_on();

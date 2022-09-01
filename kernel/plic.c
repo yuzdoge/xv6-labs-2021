@@ -21,6 +21,7 @@ plicinithart(void)
 {
   int hart = cpuid();
   
+  // PLIC_* is defined in kernel/memlayout.h
   // set uart's enable bit for this hart's S-mode. 
   *(uint32*)PLIC_SENABLE(hart)= (1 << UART0_IRQ) | (1 << VIRTIO0_IRQ);
 
