@@ -1,7 +1,10 @@
 // Saved registers for kernel context switches.
+// It should not save all registers, because the
+// caller-saved register will saved by the caller,
+// according to the calling convention
 struct context {
-  uint64 ra;
-  uint64 sp;
+  uint64 ra; // it is used to return to the function calling swtch()
+  uint64 sp; // it also a callee-saved register
 
   // callee-saved
   uint64 s0;
@@ -21,8 +24,12 @@ struct context {
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
-  struct context context;     // swtch() here to enter scheduler().
+  struct context context;     // swtch() here to enter scheduler(), *this is scheduler thread context.
   int noff;                   // Depth of push_off() nesting.
+  // *Saves and restores
+  // intena because intena is a property of this
+  // kernel thread, not this CPU*
+
   int intena;                 // Were interrupts enabled before push_off()?
 };
 
@@ -97,7 +104,7 @@ struct proc {
   struct proc *parent;         // Parent process
 
   // these are private to the process, so p->lock need not be held.
-  uint64 kstack;               // Virtual address of kernel stack
+  uint64 kstack;               // Virtual address of kernel stack, bottom of kernel stack.
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S

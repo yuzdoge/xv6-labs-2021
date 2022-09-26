@@ -138,8 +138,8 @@ found:
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
-  p->context.ra = (uint64)forkret;
-  p->context.sp = p->kstack + PGSIZE;
+  p->context.ra = (uint64)forkret; // set ra to point to forkret for a process first to run
+  p->context.sp = p->kstack + PGSIZE; // initialize kernel stack
 
   return p;
 }
@@ -393,6 +393,8 @@ wait(uint64 addr)
     // Scan through table looking for exited children.
     havekids = 0;
     for(np = proc; np < &proc[NPROC]; np++){
+      // np->parent can't change between the check and the acquire()
+      // because only the parent changes it, and we're the parent.
       if(np->parent == p){
         // make sure the child isn't still in exit() or swtch().
         acquire(&np->lock);
@@ -443,6 +445,8 @@ scheduler(void)
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
+    // This is not for scheduler thread, but the proccess is running,
+    // it is an initialization.
     intr_on();
 
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -453,24 +457,24 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        swtch(&c->context, &p->context);
+        swtch(&c->context, &p->context); // it will return to swtch() of sched() or forkret()
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
       }
-      release(&p->lock);
+      release(&p->lock); // this release match the acquire of yield, not obove.
     }
   }
 }
 
 // Switch to scheduler.  Must hold only p->lock
-// and have changed proc->state. Saves and restores
+// and have changed proc->state. *Saves and restores
 // intena because intena is a property of this
-// kernel thread, not this CPU. It should
-// be proc->intena and proc->noff, but that would
-// break in the few places where a lock is held but
-// there's no process.
+// kernel thread, not this CPU*. It should
+// be proc->intena and proc->noff(yiled should not be 
+// invoke when holding any spin lock, so noff can be 
+// sharing), but that would break in the few places where a lock is held but there's no process.
 void
 sched(void)
 {
@@ -479,7 +483,7 @@ sched(void)
 
   if(!holding(&p->lock))
     panic("sched p->lock");
-  if(mycpu()->noff != 1)
+  if(mycpu()->noff != 1) // it should not yield when holding a spin lock.
     panic("sched locks");
   if(p->state == RUNNING)
     panic("sched running");
@@ -487,7 +491,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+  swtch(&p->context, &mycpu()->context); // it will return to swtch() of scheduler
   mycpu()->intena = intena;
 }
 
@@ -499,7 +503,8 @@ yield(void)
   acquire(&p->lock);
   p->state = RUNNABLE;
   sched();
-  release(&p->lock);
+  release(&p->lock);// this release match the acquire of shecduler, not obove.
+
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -507,7 +512,7 @@ yield(void)
 void
 forkret(void)
 {
-  static int first = 1;
+  static int first = 1; // indicate if it is the fisrt user process.
 
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
@@ -525,6 +530,8 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
+// lk is a condition lock, it means that it is
+// used to lock the condtion variable.
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -537,6 +544,10 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup locks p->lock),
   // so it's okay to release lk.
 
+  // Must acquire p->lock before the condition lock,
+  // prevent wakeup() from being called in advance.
+  // (because it also need to acquire the the condition 
+  // lock before wakeup).
   acquire(&p->lock);  //DOC: sleeplock1
   release(lk);
 
