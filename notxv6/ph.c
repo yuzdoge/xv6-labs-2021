@@ -13,10 +13,11 @@ struct entry {
   int value;
   struct entry *next;
 };
-struct entry *table[NBUCKET];
+struct entry *table[NBUCKET]; // bucket
 int keys[NKEYS];
 int nthread = 1;
 
+pthread_mutex_t table_lock;
 
 double
 now()
@@ -32,17 +33,19 @@ insert(int key, int value, struct entry **p, struct entry *n)
   struct entry *e = malloc(sizeof(struct entry));
   e->key = key;
   e->value = value;
-  e->next = n;
+  e->next = n; // header insert
   *p = e;
 }
 
 static 
 void put(int key, int value)
 {
-  int i = key % NBUCKET;
+  int i = key % NBUCKET; // congruence relation
 
   // is the key already present?
-  struct entry *e = 0;
+  struct entry *e;
+  // for-loop: statement1->statement2->loop body->statement3
+  pthread_mutex_lock(&table_lock);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key)
       break;
@@ -54,6 +57,7 @@ void put(int key, int value)
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+  pthread_mutex_unlock(&table_lock);
 
 }
 
@@ -106,10 +110,12 @@ main(int argc, char *argv[])
   double t1, t0;
 
 
+
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
     exit(-1);
   }
+  
   nthread = atoi(argv[1]);
   tha = malloc(sizeof(pthread_t) * nthread);
   srandom(0);
@@ -117,6 +123,8 @@ main(int argc, char *argv[])
   for (int i = 0; i < NKEYS; i++) {
     keys[i] = random();
   }
+
+  pthread_mutex_init(&table_lock, NULL);
 
   //
   // first the puts
@@ -141,10 +149,10 @@ main(int argc, char *argv[])
     assert(pthread_create(&tha[i], NULL, get_thread, (void *) (long) i) == 0);
   }
   for(int i = 0; i < nthread; i++) {
-    assert(pthread_join(tha[i], &value) == 0);
+    assert(pthread_join(tha[i], &value) == 0); // wait for the specified thread
   }
   t1 = now();
 
   printf("%d gets, %.3f seconds, %.0f gets/second\n",
-         NKEYS*nthread, t1 - t0, (NKEYS*nthread) / (t1 - t0));
+         NKEYS*nthread, t1 - t0, (NKEYS*nthread) / (t1 - t0)); // multicore will speedup the throughout of gets
 }
