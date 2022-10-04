@@ -258,7 +258,7 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-  if((ip = ialloc(dp->dev, type)) == 0)
+  if((ip = ialloc(dp->dev, type)) == 0) // inode allocate, see kernel/fs.c
     panic("create: ialloc");
 
   ilock(ip);

@@ -24,18 +24,22 @@ struct superblock {
 
 #define FSMAGIC 0x10203040
 
-#define NDIRECT 12
-#define NINDIRECT (BSIZE / sizeof(uint))
+#define NDIRECT 12  // number of direct blocks
+#define NINDIRECT (BSIZE / sizeof(uint)) // number of indirect blocks
 #define MAXFILE (NDIRECT + NINDIRECT)
 
-// On-disk inode structure
+// On-disk inode structure (64 bytes)
 struct dinode {
   short type;           // File type
   short major;          // Major device number (T_DEVICE only)
   short minor;          // Minor device number (T_DEVICE only)
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
-  uint addrs[NDIRECT+1];   // Data block addresses
+  
+  // Data block addresses, the address is the block number, not memory address. 
+  // The last element is for indirect block which points to a block including `INDIRECT` blocks.
+  // The organization is similar to a two-level index table.
+  uint addrs[NDIRECT+1];   
 };
 
 // Inodes per block.
@@ -50,11 +54,13 @@ struct dinode {
 // Block of free map containing bit for block b
 #define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
 
-// Directory is a file containing a sequence of dirent structures.
+// Directory is a file containing a sequence of dirent structures (the essence of 
+// directory in most Unix's file system).
 #define DIRSIZ 14
 
+// Directory entry structure
 struct dirent {
-  ushort inum;
-  char name[DIRSIZ];
+  ushort inum;       // Inode number
+  char name[DIRSIZ]; // Name of the entry
 };
 
