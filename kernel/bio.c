@@ -41,6 +41,15 @@ binit(void)
   initlock(&bcache.lock, "bcache");
 
   // Create linked list of buffers
+  /*
+  logical:
+    ->|HEAD|<->|BUF|<->|BUF|<->..<->|HEAD|<-
+    |______________________________________|
+
+  realistic:
+    ->|HEAD|<->|BUF|<->|BUF|<->..<->|BUF|<-
+    |_____________________________________|
+  */
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
@@ -63,10 +72,18 @@ bget(uint dev, uint blockno)
   acquire(&bcache.lock);
 
   // Is the block already cached?
+  // (dev, blockno) identifes a buf uniquely.
   for(b = bcache.head.next; b != &bcache.head; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
       release(&bcache.lock);
+      // Note, acquiresleep() cannot be invoked inside the spinlock,
+      // otherwise it would call sleep() that could cause a dead lock.
+      //
+      // It is safe to acquire the buffer's sleep-lock 
+      // outside of the bcache.lock critical section, since
+      // the non-zero b->refcnt prevents the buffer from being
+      // re-used for a different disk block(see the following code).
       acquiresleep(&b->lock);
       return b;
     }
@@ -75,7 +92,7 @@ bget(uint dev, uint blockno)
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
   for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-    if(b->refcnt == 0) {
+    if(b->refcnt == 0) { // no file occupies this buf, i.e. it is a free buf 
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
@@ -94,7 +111,7 @@ bread(uint dev, uint blockno)
 {
   struct buf *b;
 
-  b = bget(dev, blockno);
+  b = bget(dev, blockno); // b has acquired the sleep lock.
   if(!b->valid) {
     virtio_disk_rw(b, 0);
     b->valid = 1;
@@ -106,6 +123,7 @@ bread(uint dev, uint blockno)
 void
 bwrite(struct buf *b)
 {
+  // Must call bget/bread before bwrite.
   if(!holdingsleep(&b->lock))
     panic("bwrite");
   virtio_disk_rw(b, 1);
@@ -116,7 +134,8 @@ bwrite(struct buf *b)
 void
 brelse(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
+  // If not holding a sleep-lock, it will cause refcnt decreasing from 0.
+  if(!holdingsleep(&b->lock))  
     panic("brelse");
 
   releasesleep(&b->lock);
@@ -125,6 +144,9 @@ brelse(struct buf *b)
   b->refcnt--;
   if (b->refcnt == 0) {
     // no one is waiting for it.
+    /* before:|bcache.head|<->...<->|b_p|<->| b |<->| b_n|...
+       after: |bcache.head|<->| b |<->...<->|b_p|<->|b_n|...
+    */
     b->next->prev = b->prev;
     b->prev->next = b->next;
     b->next = bcache.head.next;

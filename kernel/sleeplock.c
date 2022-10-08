@@ -18,6 +18,8 @@ initsleeplock(struct sleeplock *lk, char *name)
   lk->pid = 0;
 }
 
+// By encapsulation, it can construct a lock(i.g. the condition variable)
+// which can be holding without disable interruption of the local core.
 void
 acquiresleep(struct sleeplock *lk)
 {
@@ -26,7 +28,7 @@ acquiresleep(struct sleeplock *lk)
     sleep(lk, &lk->lk);
   }
   lk->locked = 1;
-  lk->pid = myproc()->pid;
+  lk->pid = myproc()->pid; // for debugging
   release(&lk->lk);
 }
 
@@ -40,6 +42,7 @@ releasesleep(struct sleeplock *lk)
   release(&lk->lk);
 }
 
+// Test if the local core holds the sleeplock
 int
 holdingsleep(struct sleeplock *lk)
 {
