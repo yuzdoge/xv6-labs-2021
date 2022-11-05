@@ -42,7 +42,7 @@ struct log {
   int start;
   int size;
   int outstanding; // how many FS sys calls are executing.
-  int committing;  // in commit(), please wait.
+  int committing;  // in commit(), please wait. condition variable
   int dev;
   struct logheader lh;
 };
@@ -128,10 +128,10 @@ begin_op(void)
 {
   acquire(&log.lock);
   while(1){
-    if(log.committing){
+    if(log.committing){ // cannot begin while currently committing.
       sleep(&log, &log.lock);
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
-      // this op might exhaust log space; wait for commit.
+      // this op might exhaust(run out of) log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
       log.outstanding += 1;
@@ -150,8 +150,9 @@ end_op(void)
 
   acquire(&log.lock);
   log.outstanding -= 1;
-  if(log.committing)
+  if(log.committing) // for debugging
     panic("log.committing");
+  // it is the last process executing outstanding operation of this trasaction.
   if(log.outstanding == 0){
     do_commit = 1;
     log.committing = 1;
@@ -165,7 +166,8 @@ end_op(void)
 
   if(do_commit){
     // call commit w/o holding locks, since not allowed
-    // to sleep with locks.
+    // to sleep with locks. So it need a local variable 
+    // `do_commit` and condiaton varialbe `log.committing`.
     commit();
     acquire(&log.lock);
     log.committing = 0;
@@ -211,6 +213,7 @@ commit()
 //   modify bp->data[]
 //   log_write(bp)
 //   brelse(bp)
+// *log_write() is used to write log header in memory. 
 void
 log_write(struct buf *b)
 {
@@ -228,7 +231,7 @@ log_write(struct buf *b)
   }
   log.lh.block[i] = b->blockno;
   if (i == log.lh.n) {  // Add new block to log?
-    bpin(b);
+    bpin(b); // increase refcnt of b
     log.lh.n++;
   }
   release(&log.lock);

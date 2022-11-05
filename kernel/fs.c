@@ -196,12 +196,12 @@ struct inode*
 ialloc(uint dev, short type)
 {
   int inum;
-  struct buf *bp;
-  struct dinode *dip;
+  struct buf *bp; // buffer pointer
+  struct dinode *dip; // dinode pointer
 
   for(inum = 1; inum < sb.ninodes; inum++){
-    bp = bread(dev, IBLOCK(inum, sb));
-    dip = (struct dinode*)bp->data + inum%IPB;
+    bp = bread(dev, IBLOCK(inum, sb)); // IBLOCK is defined in `kernel/fs.h`
+    dip = (struct dinode*)bp->data + inum%IPB; // base address + offset
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
