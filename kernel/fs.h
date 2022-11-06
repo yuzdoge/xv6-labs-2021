@@ -30,7 +30,7 @@ struct superblock {
 
 // On-disk inode structure
 struct dinode {
-  short type;           // File type
+  short type;           // File type, see kernel/stat.h
   short major;          // Major device number (T_DEVICE only)
   short minor;          // Minor device number (T_DEVICE only)
   short nlink;          // Number of links to inode in file system
@@ -44,7 +44,9 @@ struct dinode {
 // Block containing inode i
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
-// Bitmap bits per block
+// Bitmap bits per block, the unit of BSIZE is byte, 
+// it time 8 to convert to bit.
+
 #define BPB           (BSIZE*8)
 
 // Block of free map containing bit for block b

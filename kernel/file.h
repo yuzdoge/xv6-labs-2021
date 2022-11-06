@@ -15,11 +15,13 @@ struct file {
 
 // in-memory copy of an inode
 struct inode {
+  // (dev, inum) indentifies a inode in memory uniquely
   uint dev;           // Device number
   uint inum;          // Inode number
-  int ref;            // Reference count
+  int ref;            // Reference count, if ref is 0, the inode in italbe can be evicted/replaced.
+
   struct sleeplock lock; // protects everything below here
-  int valid;          // inode has been read from disk?
+  int valid;          // inode has been read from disk(is the inode in itable valid)?
 
   short type;         // copy of disk inode
   short major;

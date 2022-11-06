@@ -1,5 +1,5 @@
 struct buf {
-  int valid;   // has data been read from disk?
+  int valid;   // has data been read from disk?(the buf is being holded)?
   int disk;    // does disk "own" buf?
   uint dev;    // device number
   uint blockno; // block number
@@ -10,6 +10,6 @@ struct buf {
   uint refcnt;
   struct buf *prev; // LRU cache list
   struct buf *next;
-  uchar data[BSIZE]; // BSIZE is defined in kernel/fs.h
+  uchar data[BSIZE]; // BSIZE is defined in kernel/fs.h. Only this field will be written to disk.
 };
 

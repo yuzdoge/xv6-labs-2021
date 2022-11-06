@@ -69,13 +69,15 @@ balloc(uint dev)
 
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
-    for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
-      m = 1 << (bi % 8);
+    bp = bread(dev, BBLOCK(b, sb)); // Read the block of bitmap containing bit for block b
+    for(bi = 0; bi < BPB && b + bi < sb.size; bi++){ // (b+bi) is the actuall block number
+      m = 1 << (bi % 8); // get the bit mask
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
         brelse(bp);
+        // zero the block allocated.Note, no inode will refer to this block before
+        // the block zeroed, because it has not returned the block number(b+bi) yet.
         bzero(dev, b + bi);
         return b + bi;
       }
@@ -254,7 +256,9 @@ iget(uint dev, uint inum)
       release(&itable.lock);
       return ip;
     }
-    if(empty == 0 && ip->ref == 0)    // Remember empty slot.
+    // Remember empty slot. It could not break here, 
+    // because it has not traversed all inodes.
+    if(empty == 0 && ip->ref == 0)
       empty = ip;
   }
 
@@ -326,9 +330,9 @@ iunlock(struct inode *ip)
 // If that was the last reference, the inode table entry can
 // be recycled.
 // If that was the last reference and the inode has no links
-// to it, free the inode (and its content) on disk.
+// to it, free the inode (and its content) on disk(delete it).
 // All calls to iput() must be inside a transaction in
-// case it has to free the inode.
+// case it has to free the inode.And it must be called after iget().
 void
 iput(struct inode *ip)
 {
