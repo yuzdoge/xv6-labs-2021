@@ -98,7 +98,9 @@ bget(uint dev, uint blockno)
       b->valid = 0;
       b->refcnt = 1;
       release(&bcache.lock);
-      acquiresleep(&b->lock);
+      // only one process can refer to the buf at a time, becase
+      // return is behind the lock.
+      acquiresleep(&b->lock); 
       return b;
     }
   }
