@@ -378,6 +378,7 @@ iunlockput(struct inode *ip)
 
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
+// bn is the index of ip->addrs[].
 static uint
 bmap(struct inode *ip, uint bn)
 {
@@ -396,13 +397,15 @@ bmap(struct inode *ip, uint bn)
     if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
     bp = bread(ip->dev, addr);
-    a = (uint*)bp->data;
+    a = (uint*)bp->data; // a is indirect block array
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
+      // the indirect block log_write() by bmap(), because
+      // this operation is transparent to the caller.
       log_write(bp);
     }
     brelse(bp);
-    return addr;
+    return addr; // addr point to the block log_write() by the caller.
   }
 
   panic("bmap: out of range");
@@ -454,7 +457,7 @@ stati(struct inode *ip, struct stat *st)
 
 // Read data from inode.
 // Caller must hold ip->lock.
-// If user_dst==1, then dst is a user virtual address;
+// *If user_dst==1, then dst is a user virtual address;
 // otherwise, dst is a kernel address.
 int
 readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
@@ -462,17 +465,19 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
   uint tot, m;
   struct buf *bp;
 
-  if(off > ip->size || off + n < off)
-    return 0;
+  if(off > ip->size || off + n < off) // (off + n < off) means overflow
+    return 0; // EOF
   if(off + n > ip->size)
-    n = ip->size - off;
+    n = ip->size - off; // n at most is ip->size - off.
 
+  // Note, if (off == ip->size, and (n == 0), the tot will be 0,
+  // e.g, readi will also return 0.
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
-    m = min(n - tot, BSIZE - off%BSIZE);
+    m = min(n - tot, BSIZE - off%BSIZE); //Read data in only one block at a time 
     if(either_copyout(user_dst, dst, bp->data + (off % BSIZE), m) == -1) {
       brelse(bp);
-      tot = -1;
+      tot = -1; // error
       break;
     }
     brelse(bp);
@@ -510,7 +515,7 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
   }
 
   if(off > ip->size)
-    ip->size = off;
+    ip->size = off; // extend the size
 
   // write the i-node back to disk even if the size didn't change
   // because the loop above might have called bmap() and added a new
