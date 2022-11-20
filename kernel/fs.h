@@ -56,7 +56,10 @@ struct dinode {
 #define DIRSIZ 14
 
 struct dirent {
-  ushort inum;
-  char name[DIRSIZ];
+  ushort inum; // inode number zero means free
+
+  // the name is at most DIRSIZE characters, if shorter,
+  // if shorter, it is terminated by a NULL.
+  char name[DIRSIZ]; 
 };
 

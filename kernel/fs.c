@@ -534,7 +534,7 @@ namecmp(const char *s, const char *t)
 }
 
 // Look for a directory entry in a directory.
-// If found, set *poff to byte offset of entry.
+// If found, set *poff() to byte offset of entry.
 struct inode*
 dirlookup(struct inode *dp, char *name, uint *poff)
 {
@@ -554,7 +554,9 @@ dirlookup(struct inode *dp, char *name, uint *poff)
       if(poff)
         *poff = off;
       inum = de.inum;
-      return iget(dp->dev, inum);
+      // the inodes of the directory entries is stored in the
+      // same device as the directory inode.
+      return iget(dp->dev, inum); 
     }
   }
 
@@ -571,7 +573,7 @@ dirlink(struct inode *dp, char *name, uint inum)
 
   // Check that name is not present.
   if((ip = dirlookup(dp, name, 0)) != 0){
-    iput(ip);
+    iput(ip); // dirlookup: return iget()
     return -1;
   }
 
@@ -582,7 +584,7 @@ dirlink(struct inode *dp, char *name, uint inum)
     if(de.inum == 0)
       break;
   }
-
+  // if not find a free dirent, writei() will extrend the directory size.
   strncpy(de.name, name, DIRSIZ);
   de.inum = inum;
   if(writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
@@ -604,68 +606,78 @@ dirlink(struct inode *dp, char *name, uint inum)
 //   skipelem("///a//bb", name) = "bb", setting name = "a"
 //   skipelem("a", name) = "", setting name = "a"
 //   skipelem("", name) = skipelem("////", name) = 0
-//
+// the leading slashes of the parameter of path are be omitted. 
 static char*
 skipelem(char *path, char *name)
 {
   char *s;
   int len;
 
-  while(*path == '/')
+  while(*path == '/') // skip leading slashes
     path++;
-  if(*path == 0)
+  if(*path == 0) // no next path element
     return 0;
-  s = path;
+  s = path; // start of the next path element
   while(*path != '/' && *path != 0)
     path++;
-  len = path - s;
-  if(len >= DIRSIZ)
+  len = path - s; // length of the next path element
+  if(len >= DIRSIZ) // truncate
     memmove(name, s, DIRSIZ);
   else {
     memmove(name, s, len);
-    name[len] = 0;
+    name[len] = 0; // if shorter than DIRSIZ, terminated by a NULL
   }
-  while(*path == '/')
+  while(*path == '/') // return a path  no leading slashes
     path++;
   return path;
 }
 
 // Look up and return the inode for a path name.
-// If parent != 0, return the inode for the parent and copy the final
+// If nameiparent != 0, return the inode for the parent and copy the final
 // path element into name, which must have room for DIRSIZ bytes.
 // Must be called inside a transaction since it calls iput().
+// Note, return a valid inode if only if all path elements in`path` are directory type.
 static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
 
   if(*path == '/')
-    ip = iget(ROOTDEV, ROOTINO);
+    ip = iget(ROOTDEV, ROOTINO); // `ROOTDEV` is defined in `kernel/param.h`
   else
-    ip = idup(myproc()->cwd);
+    ip = idup(myproc()->cwd); // increase ref of current work directory
 
-  while((path = skipelem(path, name)) != 0){
-    ilock(ip);
+  // `name` is the next path element(directory) of current diretory(inode)
+  // and `path` is the rest path elements.
+  while((path = skipelem(path, name)) != 0){ // has next path element
+    ilock(ip); // guarante that the inode has been loaded from disk
+    // the look up falis if not a directory
     if(ip->type != T_DIR){
       iunlockput(ip);
       return 0;
     }
-    if(nameiparent && *path == '\0'){
+    
+    // if nameiparent == 1, return the inode for the parent of the final directory
+    if(nameiparent && *path == '\0'){ // *path = 0 means this invoke copies the final path element to name
       // Stop one level early.
-      iunlock(ip);
+      iunlock(ip); // because this case return ip, caller will call iput
       return ip;
     }
-    if((next = dirlookup(ip, name, 0)) == 0){
+    if((next = dirlookup(ip, name, 0)) == 0){ // cannot not find the diretory
       iunlockput(ip);
       return 0;
     }
     iunlockput(ip);
     ip = next;
   }
+
+  // handle the error case namex("/", 1, name) or namex("", 1, name)
   if(nameiparent){
     iput(ip);
     return 0;
   }
+
+  // nameiparent == 0 and run out of elements
   return ip;
 }
 
