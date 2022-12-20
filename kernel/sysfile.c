@@ -145,6 +145,9 @@ sys_link(void)
   if((dp = nameiparent(new, name)) == 0)
     goto bad;
   ilock(dp);
+  // the new parent directory must exist and be on the same device 
+  // as the existing inode(because inum only have a unique meaning on
+  // a single disk).In fact, multiple paths map to the same inode. 
   if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
     iunlockput(dp);
     goto bad;
@@ -252,12 +255,14 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
+    // the creating file has existed 
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
     return 0;
   }
 
+  // initialize the allocated inode
   if((ip = ialloc(dp->dev, type)) == 0)
     panic("create: ialloc");
 
@@ -280,7 +285,7 @@ create(char *path, short type, short major, short minor)
 
   iunlockput(dp);
 
-  return ip;
+  return ip; // return a lockecd ip, because the ip only be partially initialized.
 }
 
 uint64
@@ -304,7 +309,7 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
+    if((ip = namei(path)) == 0){ // return a unlockecd ip
       end_op();
       return -1;
     }

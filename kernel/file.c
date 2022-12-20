@@ -73,6 +73,7 @@ fileclose(struct file *f)
   f->type = FD_NONE;
   release(&ftable.lock);
 
+  // release underlying resources
   if(ff.type == FD_PIPE){
     pipeclose(ff.pipe, ff.writable);
   } else if(ff.type == FD_INODE || ff.type == FD_DEVICE){
@@ -82,7 +83,7 @@ fileclose(struct file *f)
   }
 }
 
-// Get metadata about file f.
+// Get metadata about file f(only for inode and device, not for pipe).
 // addr is a user virtual address, pointing to a struct stat.
 int
 filestat(struct file *f, uint64 addr)
@@ -103,6 +104,7 @@ filestat(struct file *f, uint64 addr)
 
 // Read from file f.
 // addr is a user virtual address.
+// Before fileread, the file f must have been open(a operation for filling f).
 int
 fileread(struct file *f, uint64 addr, int n)
 {
@@ -120,7 +122,7 @@ fileread(struct file *f, uint64 addr, int n)
   } else if(f->type == FD_INODE){
     ilock(f->ip);
     if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
-      f->off += r;
+      f->off += r; // advance the offset pointer
     iunlock(f->ip);
   } else {
     panic("fileread");

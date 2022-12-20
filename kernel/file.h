@@ -1,6 +1,6 @@
 struct file {
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
-  int ref; // reference count
+  int ref; // reference count(if ref==0, it means a free file structure)
   char readable; // if the file is readalbe
   char writable; // if the file is writable
   struct pipe *pipe; // FD_PIPE
@@ -9,6 +9,9 @@ struct file {
   short major;       // FD_DEVICE
 };
 
+// device number:
+//  31   16 15     0 
+// | major | minor |
 #define major(dev)  ((dev) >> 16 & 0xFFFF)
 #define minor(dev)  ((dev) & 0xFFFF)
 #define	mkdev(m,n)  ((uint)((m)<<16| (n)))
@@ -32,11 +35,12 @@ struct inode {
 };
 
 // map major device number to device functions.
+// it has the same device functions if it has the same major device number.
 struct devsw {
   int (*read)(int, uint64, int);
   int (*write)(int, uint64, int);
 };
 
-extern struct devsw devsw[];
+extern struct devsw devsw[]; // the global table is defined in `kernel/file.c`
 
 #define CONSOLE 1
