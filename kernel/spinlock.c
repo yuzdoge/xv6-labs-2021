@@ -61,7 +61,10 @@ initlock(struct spinlock *lk, char *name)
 void
 acquire(struct spinlock *lk)
 {
-  push_off(); // disable interrupts to avoid deadlock.
+  // disable interrupts to avoid deadlock. if not, another thread 
+  // will aquire a lock which this thread wiil acquire later, this
+  // causes a deadlock.
+  push_off(); 
   if(holding(lk))
     panic("acquire");
 

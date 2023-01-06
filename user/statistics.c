@@ -8,7 +8,7 @@ statistics(void *buf, int sz)
 {
   int fd, i, n;
   
-  fd = open("statistics", O_RDONLY);
+  fd = open("statistics", O_RDONLY); // the inode made in user/init.c
   if(fd < 0) {
       fprintf(2, "stats: open failed\n");
       exit(1);

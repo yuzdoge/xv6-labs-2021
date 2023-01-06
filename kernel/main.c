@@ -46,6 +46,9 @@ main()
       ;
     __sync_synchronize();
     printf("hart %d starting\n", cpuid());
+#ifdef LAB_LOCK
+    kinit(); 
+#endif
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
