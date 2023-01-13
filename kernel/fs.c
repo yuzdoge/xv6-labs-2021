@@ -376,7 +376,7 @@ iunlockput(struct inode *ip)
 // are listed in ip->addrs[].  The next NINDIRECT blocks are
 // listed in block ip->addrs[NDIRECT].
 
-// Return the disk block address of the nth block in inode ip.
+// Return the disk block address of the nth block in inode ip(i.e. bno).
 // If there is no such block, bmap allocates one.
 // bn is the index of ip->addrs[].
 static uint
@@ -408,6 +408,33 @@ bmap(struct inode *ip, uint bn)
     return addr; // addr point to the block log_write() by the caller.
   }
 
+#ifdef LAB_FS
+  bn -= NINDIRECT;
+  uint bn1 = bn / NINDIRECT;
+  uint bn2 = bn % NINDIRECT;
+  //struct buf *bp2;
+
+  if (bn < NINDIRECT2) {
+    if ((addr = ip->addrs[NDIRECT+1]) == 0)
+      ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if ((addr = a[bn1]) == 0) {
+      a[bn1] = addr = balloc(ip->dev); 
+      log_write(bp);
+    }
+    brelse(bp);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if ((addr = a[bn2]) == 0) {
+      a[bn2] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+#endif
+
   panic("bmap: out of range");
 }
 
@@ -438,6 +465,31 @@ itrunc(struct inode *ip)
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
+#ifdef LAB_FS
+  struct buf *bp2;
+  uint *a2;
+  if (ip->addrs[NDIRECT+1]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a = (uint*)bp->data;
+    for (i = 0; i < NINDIRECT; i++) {
+      if (a[i]) {
+
+        bp2 = bread(ip->dev, a[i]);
+        a2 = (uint*)bp2->data;
+        for (j = 0; j < NINDIRECT; j++) {
+          if (a2[j])
+            bfree(ip->dev, a2[j]);
+        }
+        brelse(bp2);
+
+        bfree(ip->dev, a[i]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
+  } 
+#endif
 
   ip->size = 0;
   iupdate(ip);
