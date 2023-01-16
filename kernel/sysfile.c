@@ -115,6 +115,7 @@ sys_fstat(void)
   return filestat(f, st);
 }
 
+
 // Create the path new as a link to the same inode as old.
 uint64
 sys_link(void)
@@ -285,8 +286,38 @@ create(char *path, short type, short major, short minor)
 
   iunlockput(dp);
 
-  return ip; // return a lockecd ip, because the ip only be partially initialized.
+  return ip; // return a lockecd inode, because the ip only be partially initialized.
 }
+
+#ifdef LAB_FS
+uint64
+sys_symlink(void) {
+
+  char target[MAXPATH];
+  char linkpath[MAXPATH];
+  struct inode* ip;
+
+  if (argstr(0, target, MAXPATH) < 0 || argstr(1, linkpath, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  ip = create(linkpath, T_SYMLINK, 0, 0);
+  if (ip == 0) {
+    end_op();
+    return -1;
+  }
+
+  if (writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH) {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+
+  iunlockput(ip);
+  end_op();
+  return 0;
+}
+#endif
 
 uint64
 sys_open(void)
@@ -303,13 +334,13 @@ sys_open(void)
   begin_op();
 
   if(omode & O_CREATE){
-    ip = create(path, T_FILE, 0, 0);
+    ip = create(path, T_FILE, 0, 0); // return a locked inode
     if(ip == 0){
       end_op();
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){ // return a unlockecd ip
+    if((ip = namei(path)) == 0){ // return a unlockecd inode
       end_op();
       return -1;
     }
@@ -321,11 +352,43 @@ sys_open(void)
     }
   }
 
+#ifdef LAB_FS
+#define THRESHOLD 10
+  int cnt;
+  for (cnt = 0; cnt < THRESHOLD; cnt++) {
+
+    if ((omode & O_NOFOLLOW) || (ip->type != T_SYMLINK))
+      break;
+
+    if (readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    iunlockput(ip);
+
+    if ((ip = namei(path)) == 0) {
+      end_op();
+      return -1;
+    }
+    ilock(ip);
+  }
+
+  if (cnt >= THRESHOLD) {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  
+#endif
+
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
     return -1;
   }
+
+
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
