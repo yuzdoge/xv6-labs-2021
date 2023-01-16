@@ -313,7 +313,7 @@ growproc(int n)
   return 0;
 }
 
-// Create½3½1½1½1½1½1½1½1½1½1½1½1½1½1½1 a new process, copying the parent.
+// Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
 fork(void)
