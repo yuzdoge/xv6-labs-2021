@@ -5,6 +5,12 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#ifdef LAB_MMAP
+#include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "fcntl.h"
+#endif
 
 struct spinlock tickslock;
 uint ticks;
@@ -68,9 +74,66 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+#ifdef LAB_MMAP
+    if (r_scause() == 13 || r_scause() == 15) {
+      uint64 va = r_stval();
+      int i, perm;
+      struct vma *v;
+      pte_t *pte;
+      // 判断虚拟地址是否在vma中,如果不在，跳到err，
+      // 如果在：判断是否已经映射，如果没有映射，则映射，
+      //          否则跳到err
+      for (i = 0; i < MAXVMA; i++) {
+        v = &p->vma[i];
+        if (v->valid && va >= v->va && va < v->va + v->len) {
+          pte = walk(p->pagetable, va, 0);
+
+          if (pte && (*pte & PTE_V))
+            goto err;
+
+          uint64 ka = (uint64)kalloc();
+          if (ka == 0) {
+            p->killed = 1;
+          } else {
+            memset((void *)ka, 0, PGSIZE);
+            perm = PTE_U;
+            perm = v->prot & PROT_READ  ? perm | PTE_R : perm;
+            perm = v->prot & PROT_WRITE ? perm | PTE_W : perm;
+            perm = v->prot & PROT_EXEC  ? perm | PTE_X : perm;
+
+            uint off = v->off + PGROUNDDOWN(va - v->va);
+            ilock(v->f->ip);
+            if (readi(v->f->ip, 0, (uint64)ka, off, PGSIZE) < 0) {
+              iunlock(v->f->ip);
+              kfree((void *)ka);
+              p->killed = 1;
+            } else {
+              iunlock(v->f->ip);
+              if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)ka, perm) != 0) {
+                kfree((void *)ka);
+                p->killed = 1;
+              }
+            }
+          }
+          break;
+        }
+      }
+
+      if (i >= MAXVMA)
+         goto err;
+
+    } else {
+err:
+
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
+#else
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
+#endif
   }
 
   if(p->killed)

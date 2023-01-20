@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -299,6 +300,16 @@ fork(void)
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
+
+#ifdef LAB_MMAP
+  for (i = 0; i < MAXVMA; i++) {
+    if (p->vma[i].valid) {
+      np->vma[i] = p->vma[i]; 
+      filedup(p->vma[i].f);
+    }
+  }
+#endif
+
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
@@ -352,6 +363,18 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+#ifdef LAB_MMAP
+  for (int i = 0; i < MAXVMA; i++) {
+    if (p->vma[i].valid) {
+      if (p->vma[i].flags == MAP_SHARED)
+        filewrite(p->vma[i].f, p->vma[i].va, (int)p->vma[i].len);
+
+      fileclose(p->vma[i].f);
+      p->vma[i].valid = 0;
+    }
+  } 
+#endif
 
   begin_op();
   iput(p->cwd);

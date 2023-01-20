@@ -43,11 +43,13 @@ _v1(char *p)
         printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);
         err("v1 mismatch (1)");
       }
+      //else printf("read A\n");
     } else {
       if (p[i] != 0) {
         printf("mismatch at %d, wanted zero, got 0x%x\n", i, p[i]);
         err("v1 mismatch (2)");
       }
+      //else printf("read 0\n");
     }
   }
 }

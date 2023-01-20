@@ -24,6 +24,11 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
+#ifdef LAB_MMAP
+void *mmap(void *, uint, int, int, int, uint);
+int munmap(void *, uint);
+#endif
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
