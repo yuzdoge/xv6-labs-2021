@@ -46,10 +46,10 @@ e1000_init(uint32 *xregs)
     tx_mbufs[i] = 0;
   }
   regs[E1000_TDBAL] = (uint64) tx_ring;
-  if(sizeof(tx_ring) % 128 != 0)
+  if(sizeof(tx_ring) % 128 != 0) // [E1000 14.5] TDLEN must be 128B aligend
     panic("e1000");
   regs[E1000_TDLEN] = sizeof(tx_ring);
-  regs[E1000_TDH] = regs[E1000_TDT] = 0;
+  regs[E1000_TDH] = regs[E1000_TDT] = 0; // empty ring buffer
   
   // [E1000 14.4] Receive initialization
   memset(rx_ring, 0, sizeof(rx_ring));
@@ -63,7 +63,7 @@ e1000_init(uint32 *xregs)
   if(sizeof(rx_ring) % 128 != 0)
     panic("e1000");
   regs[E1000_RDH] = 0;
-  regs[E1000_RDT] = RX_RING_SIZE - 1;
+  regs[E1000_RDT] = RX_RING_SIZE - 1; // give all descriptors to hardware
   regs[E1000_RDLEN] = sizeof(rx_ring);
 
   // filter by qemu's MAC address, 52:54:00:12:34:56
@@ -102,7 +102,32 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  
+ 
+  acquire(&e1000_lock);
+
+  uint32 tail = regs[E1000_TDT] % TX_RING_SIZE;
+  struct tx_desc *txdptr = &tx_ring[tail];
+  if (!(txdptr->status & E1000_TXD_STAT_DD)) {
+    release(&e1000_lock);
+    return -1;
+  }
+
+  if (tx_mbufs[tail]) {
+    mbuffree(tx_mbufs[tail]);
+  }
+
+  tx_mbufs[tail] = m;
+
+  txdptr->addr = (uint64)m->head;
+  txdptr->length = (uint16)m->len;
+  txdptr->cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
+  txdptr->status = 0;
+
+  regs[E1000_TDT] = (tail + 1) % TX_RING_SIZE; 
+
+  __sync_synchronize();
+  release(&e1000_lock);
+
   return 0;
 }
 
@@ -115,6 +140,35 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+
+  for (;;) {
+    acquire(&e1000_lock);
+    uint32 rd = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+    struct rx_desc *rxdptr = &rx_ring[rd];
+
+    if (!(rxdptr->status & E1000_RXD_STAT_DD)) {
+      release(&e1000_lock);
+      return;
+    }
+
+    struct mbuf *m = rx_mbufs[rd];
+    m->len = (unsigned int)rxdptr->length;
+
+
+    if (!(rx_mbufs[rd] = mbufalloc(0)))
+      panic("e1000_recv");
+
+    rxdptr->addr = (uint64)rx_mbufs[rd]->head;
+    rxdptr->status= 0;
+    regs[E1000_RDT] = rd;
+
+    __sync_synchronize();
+    release(&e1000_lock);
+
+    net_rx(m);
+  }
+  
+  return;
 }
 
 void

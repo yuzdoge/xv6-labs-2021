@@ -33,6 +33,7 @@ ping(uint16 sport, uint16 dport, int attempts)
     }
   }
 
+
   char ibuf[128];
   int cc = read(fd, ibuf, sizeof(ibuf)-1);
   if(cc < 0){
@@ -46,6 +47,7 @@ ping(uint16 sport, uint16 dport, int attempts)
     fprintf(2, "ping didn't receive correct payload\n");
     exit(1);
   }
+
 }
 
 // Encode a DNS name

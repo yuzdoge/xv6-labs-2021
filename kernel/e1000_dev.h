@@ -4,6 +4,8 @@
 //
 
 /* Registers */
+// Note: The reason of dividing address by 4 is that e1000_init() regards 
+// regs[] as an uint32 type array, which indexed by 4 bytes.
 #define E1000_CTL      (0x00000/4)  /* Device Control Register - RW */
 #define E1000_ICR      (0x000C0/4)  /* Interrupt Cause Read - R */
 #define E1000_IMS      (0x000D0/4)  /* Interrupt Mask Set - RW */
