@@ -49,6 +49,7 @@ main()
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
+    //panic("abcdefgabcdefgabcdefgabcdefg123456789123456789123456789123456789123456789abcedfghijklmnopqrstuvwxyz\n"); Test concurrent panci().
   }
 
   scheduler();        
